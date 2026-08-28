@@ -1,150 +1,304 @@
+```yaml
 name: IPO GMP Scraper
 
 on:
+
+  # Manual run
   workflow_dispatch:
 
+  # Run every 30 minutes
   schedule:
     - cron: "*/30 * * * *"
+
+
+# ============================================================
+# PERMISSIONS
+# ============================================================
 
 permissions:
   contents: write
 
+
+# ============================================================
+# JOB
+# ============================================================
+
 jobs:
+
   scrape:
 
     runs-on: ubuntu-latest
 
+
     steps:
 
-      # =====================================================
-      # 1. Checkout repository
-      # =====================================================
+
+      # ======================================================
+      # 1. CHECKOUT
+      # ======================================================
 
       - name: Checkout repository
+
         uses: actions/checkout@v5
+
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      # =====================================================
-      # 2. Setup Python
-      # =====================================================
+
+      # ======================================================
+      # 2. PYTHON
+      # ======================================================
 
       - name: Setup Python
+
         uses: actions/setup-python@v6
+
         with:
           python-version: "3.12"
           cache: "pip"
 
-      # =====================================================
-      # 3. Install dependencies
-      # =====================================================
+
+      # ======================================================
+      # 3. INSTALL DEPENDENCIES
+      # ======================================================
 
       - name: Install dependencies
+
         run: |
+
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
+
           python -m playwright install --with-deps chromium
 
-      # =====================================================
-      # 4. Run scraper
-      # =====================================================
+
+      # ======================================================
+      # 4. RUN SCRAPER
+      # ======================================================
 
       - name: Run IPO GMP scraper
+
         env:
+
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+
         run: |
-          echo "Starting IPO GMP scraper..."
+
+          echo "=========================================="
+          echo "STARTING IPO GMP SCRAPER"
+          echo "=========================================="
+
           python ipo_gmp_scraper.py
+
+          echo ""
           echo "Scraper completed."
 
-      # =====================================================
-      # 5. Show generated files
-      # =====================================================
 
-      - name: Check generated files
+      # ======================================================
+      # 5. VERIFY CSV FILES
+      # ======================================================
+
+      - name: Verify generated CSV files
+
         run: |
-          echo "Repository files:"
+
+          echo "=========================================="
+          echo "REPOSITORY FILES"
+          echo "=========================================="
+
           ls -lah
 
+
           echo ""
-          echo "CSV files:"
+          echo "=========================================="
+          echo "CSV FILES"
+          echo "=========================================="
+
           ls -lah *.csv 2>/dev/null || true
 
-          echo ""
-          echo "History file:"
-          if [ -f ipo_gmp_history.csv ]; then
-            echo "ipo_gmp_history.csv EXISTS"
-            wc -l ipo_gmp_history.csv
-            head -5 ipo_gmp_history.csv
-          else
-            echo "ipo_gmp_history.csv NOT FOUND"
-          fi
 
           echo ""
-          echo "Result file:"
-          if [ -f ipo_gmp_result.csv ]; then
+          echo "=========================================="
+          echo "RESULT CSV"
+          echo "=========================================="
+
+          if [ -f "ipo_gmp_result.csv" ]; then
+
             echo "ipo_gmp_result.csv EXISTS"
+
+            echo "File size:"
+            ls -lh ipo_gmp_result.csv
+
+            echo "Number of lines:"
             wc -l ipo_gmp_result.csv
-            head -5 ipo_gmp_result.csv
+
+            echo ""
+            echo "First 10 lines:"
+            head -10 ipo_gmp_result.csv
+
           else
-            echo "ipo_gmp_result.csv NOT FOUND"
+
+            echo "ERROR: ipo_gmp_result.csv NOT FOUND"
+
+            exit 1
+
           fi
 
-      # =====================================================
-      # 6. Commit generated CSV files
-      # =====================================================
 
-      - name: Commit CSV files
+          echo ""
+          echo "=========================================="
+          echo "HISTORY CSV"
+          echo "=========================================="
+
+          if [ -f "ipo_gmp_history.csv" ]; then
+
+            echo "ipo_gmp_history.csv EXISTS"
+
+            echo "File size:"
+            ls -lh ipo_gmp_history.csv
+
+            echo "Number of lines:"
+            wc -l ipo_gmp_history.csv
+
+            echo ""
+            echo "First 10 lines:"
+            head -10 ipo_gmp_history.csv
+
+          else
+
+            echo "ERROR: ipo_gmp_history.csv NOT FOUND"
+
+            exit 1
+
+          fi
+
+
+      # ======================================================
+      # 6. CHECK GIT STATUS
+      # ======================================================
+
+      - name: Check Git status
+
         run: |
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          echo "Checking Git status..."
+          echo "=========================================="
+          echo "GIT STATUS"
+          echo "=========================================="
 
           git status --short
 
-          # Add only generated data files
+          echo ""
+          echo "Current commit:"
+          git log -1 --oneline
+
+
+      # ======================================================
+      # 7. COMMIT CSV FILES
+      # ======================================================
+
+      - name: Commit CSV files
+
+        run: |
+
+          echo "=========================================="
+          echo "COMMITTING CSV FILES"
+          echo "=========================================="
+
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          # Add generated files
+
           git add ipo_gmp_result.csv
+
           git add ipo_gmp_history.csv
 
+
+          echo ""
           echo "Staged changes:"
+
           git diff --cached --stat
 
-          # -------------------------------------------------
-          # Nothing changed
-          # -------------------------------------------------
+
+          # --------------------------------------------------
+          # Check whether anything changed
+          # --------------------------------------------------
 
           if git diff --cached --quiet; then
 
+            echo ""
             echo "No CSV changes detected."
+
             exit 0
 
           fi
 
-          # -------------------------------------------------
-          # Commit changes
-          # -------------------------------------------------
+
+          # --------------------------------------------------
+          # Commit
+          # --------------------------------------------------
 
           git commit -m "Update IPO GMP data"
 
-      # =====================================================
-      # 7. Push safely
-      # =====================================================
+
+      # ======================================================
+      # 8. PUSH
+      # ======================================================
 
       - name: Push changes
+
         run: |
 
-          echo "Fetching latest main branch..."
+          echo "=========================================="
+          echo "PUSHING CSV FILES"
+          echo "=========================================="
 
-          git fetch origin main
-
-          echo "Synchronizing local branch..."
-
-          git merge --no-edit origin/main || true
-
-          echo "Pushing generated data..."
 
           git push origin HEAD:main
+
+
+          echo ""
+          echo "Push completed successfully."
+
+
+      # ======================================================
+      # 9. FINAL CHECK
+      # ======================================================
+
+      - name: Final verification
+
+        run: |
+
+          echo "=========================================="
+          echo "FINAL VERIFICATION"
+          echo "=========================================="
+
+
+          echo ""
+          echo "ipo_gmp_result.csv"
+
+          ls -lh ipo_gmp_result.csv
+
+
+          echo ""
+          echo "ipo_gmp_history.csv"
+
+          ls -lh ipo_gmp_history.csv
+
+
+          echo ""
+          echo "Latest commit:"
+
+          git log -1 --oneline
+
+
+          echo ""
+          echo "IPO GMP scraper workflow completed successfully."
+```
