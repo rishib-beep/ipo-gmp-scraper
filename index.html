@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>IPO GMP Dashboard</title>
+
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background: #f5f7fa;
+    color: #222;
+}
+
+.header {
+    background: #111827;
+    color: white;
+    padding: 20px;
+}
+
+.header h1 {
+    margin: 0 0 5px 0;
+}
+
+.header p {
+    margin: 0;
+    opacity: 0.8;
+}
+
+.container {
+    padding: 20px;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+input {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    width: 300px;
+}
+
+button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #2563eb;
+    color: white;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+.status {
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.table-container {
+    overflow-x: auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1600px;
+}
+
+thead {
+    background: #1f2937;
+    color: white;
+}
+
+th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: center;
+    white-space: nowrap;
+}
+
+th {
+    cursor: pointer;
+}
+
+th:hover {
+    background: #374151;
+}
+
+tbody tr:hover {
+    background: #f3f4f6;
+}
+
+.gmp-positive {
+    font-weight: bold;
+}
+
+.gmp-negative {
+    font-weight: bold;
+}
+
+.rating {
+    font-size: 16px;
+}
+
+.footer {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="header">
+
+<h1>IPO GMP Dashboard</h1>
+
+<p>
+Live IPO Grey Market Premium Data
+</p>
+
+</div>
+
+
+<div class="container">
+
+
+<div class="controls">
+
+<input
+    type="text"
+    id="search"
+    placeholder="Search IPO name..."
+>
+
+<button onclick="loadCSV()">
+Refresh Data
+</button>
+
+</div>
+
+
+<div class="status" id="status">
+Loading data...
+</div>
+
+
+<div class="table-container">
+
+<table id="ipoTable">
+
+<thead>
+
+<tr id="headerRow"></tr>
+
+</thead>
+
+<tbody id="tableBody"></tbody>
+
+</table>
+
+</div>
+
+
+</div>
+
+
+<div class="footer">
+
+Data automatically updated from GitHub CSV.
+
+</div>
+
+
+<script>
+
+
+const CSV_URL =
+    "ipo_gmp_result.csv?t=" + Date.now();
+
+
+let allData = [];
+
+
+function parseCSV(text) {
+
+    const rows = [];
+
+    let row = [];
+
+    let value = "";
+
+    let insideQuotes = false;
+
+
+    for (let i = 0; i < text.length; i++) {
+
+        const char = text[i];
+
+        const next = text[i + 1];
+
+
+        if (char === '"' && next === '"') {
+
+            value += '"';
+
+            i++;
+
+        }
+
+        else if (char === '"') {
+
+            insideQuotes = !insideQuotes;
+
+        }
+
+        else if (char === "," && !insideQuotes) {
+
+            row.push(value);
+
+            value = "";
+
+        }
+
+        else if (
+            (char === "\n" || char === "\r")
+            && !insideQuotes
+        ) {
+
+            if (char === "\r" && next === "\n") {
+                i++;
+            }
+
+            row.push(value);
+
+            rows.push(row);
+
+            row = [];
+
+            value = "";
+
+        }
+
+        else {
+
+            value += char;
+
+        }
+
+    }
+
+
+    if (value.length > 0 || row.length > 0) {
+
+        row.push(value);
+
+        rows.push(row);
+
+    }
+
+
+    return rows;
+
+}
+
+
+function escapeHTML(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+}
+
+
+function displayTable(data) {
+
+    const headerRow =
+        document.getElementById("headerRow");
+
+    const tableBody =
+        document.getElementById("tableBody");
+
+
+    headerRow.innerHTML = "";
+
+    tableBody.innerHTML = "";
+
+
+    if (!data.length) {
+
+        document.getElementById("status")
+            .innerText = "No data found.";
+
+        return;
+
+    }
+
+
+    const headers = data[0];
+
+
+    headers.forEach((header, index) => {
+
+        const th = document.createElement("th");
+
+        th.innerText = header;
+
+        th.onclick = () => sortTable(index);
+
+        headerRow.appendChild(th);
+
+    });
+
+
+    for (let i = 1; i < data.length; i++) {
+
+        const tr = document.createElement("tr");
+
+
+        data[i].forEach((value, index) => {
+
+            const td =
+                document.createElement("td");
+
+            td.innerHTML =
+                escapeHTML(value);
+
+
+            if (headers[index] === "GMP") {
+
+                const number =
+                    parseFloat(
+                        String(value)
+                            .replace(/[₹,]/g, "")
+                    );
+
+
+                if (!isNaN(number)) {
+
+                    if (number > 0) {
+
+                        td.classList.add(
+                            "gmp-positive"
+                        );
+
+                    }
+
+                    else if (number < 0) {
+
+                        td.classList.add(
+                            "gmp-negative"
+                        );
+
+                    }
+
+                }
+
+            }
+
+
+            if (headers[index] === "Rating") {
+
+                td.classList.add("rating");
+
+            }
+
+
+            tr.appendChild(td);
+
+        });
+
+
+        tableBody.appendChild(tr);
+
+    }
+
+
+    document.getElementById("status")
+        .innerText =
+        "Showing " +
+        (data.length - 1) +
+        " IPOs";
+
+}
+
+
+function sortTable(columnIndex) {
+
+    const headers = allData[0];
+
+
+    const header = headers[columnIndex];
+
+
+    const rows = allData.slice(1);
+
+
+    rows.sort((a, b) => {
+
+        const A = a[columnIndex] || "";
+
+        const B = b[columnIndex] || "";
+
+
+        const numA =
+            parseFloat(
+                String(A).replace(/[₹,%x,]/g, "")
+            );
+
+        const numB =
+            parseFloat(
+                String(B).replace(/[₹,%x,]/g, "")
+            );
+
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+
+            return numB - numA;
+
+        }
+
+
+        return String(A).localeCompare(
+            String(B)
+        );
+
+    });
+
+
+    allData =
+        [headers, ...rows];
+
+
+    displayTable(allData);
+
+}
+
+
+async function loadCSV() {
+
+    try {
+
+        document.getElementById("status")
+            .innerText =
+            "Loading latest IPO GMP data...";
+
+
+        const response =
+            await fetch(
+                "ipo_gmp_result.csv?t=" +
+                Date.now()
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "CSV could not be loaded"
+            );
+
+        }
+
+
+        const text =
+            await response.text();
+
+
+        allData =
+            parseCSV(text);
+
+
+        displayTable(allData);
+
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+
+        document.getElementById("status")
+            .innerText =
+            "Error loading CSV: " +
+            error.message;
+
+    }
+
+}
+
+
+/* Search */
+
+document
+    .getElementById("search")
+    .addEventListener(
+        "input",
+        function () {
+
+            const search =
+                this.value
+                    .toLowerCase()
+                    .trim();
+
+
+            if (!search) {
+
+                displayTable(allData);
+
+                return;
+
+            }
+
+
+            const headers =
+                allData[0];
+
+
+            const filtered =
+                allData
+                    .slice(1)
+                    .filter(row =>
+                        row.some(value =>
+                            String(value)
+                                .toLowerCase()
+                                .includes(search)
+                        )
+                    );
+
+
+            displayTable(
+                [headers, ...filtered]
+            );
+
+        }
+    );
+
+
+/* Initial load */
+
+loadCSV();
+
+
+/* Automatically refresh every 5 minutes */
+
+setInterval(
+    loadCSV,
+    5 * 60 * 1000
+);
+
+
+</script>
+
+
+</body>
+
+</html>
