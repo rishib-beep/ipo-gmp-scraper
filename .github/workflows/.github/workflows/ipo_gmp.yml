@@ -1,0 +1,86 @@
+name: IPO GMP Scraper
+
+"on":
+  workflow_dispatch:
+
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Run IPO GMP scraper
+        run: |
+          python ipo_gmp_scraper.py
+
+      - name: Check CSV files
+        run: |
+          echo "Checking output files..."
+
+          ls -lah
+
+          if [ ! -f "ipo_gmp_result.csv" ]; then
+            echo "ERROR: ipo_gmp_result.csv was not created."
+            exit 1
+          fi
+
+          if [ ! -f "ipo_gmp_history.csv" ]; then
+            echo "Creating history file..."
+            echo "IPO Name,GMP Numeric,GMP %,Data Date,Data Time,Last Updated" > ipo_gmp_history.csv
+          fi
+
+          echo "CSV files found:"
+          ls -lh *.csv
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Synchronize repository
+        run: |
+          git fetch origin main
+          git rebase origin/main
+
+      - name: Add CSV files
+        run: |
+          git add ipo_gmp_result.csv
+          git add ipo_gmp_history.csv
+
+      - name: Commit changes
+        run: |
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update IPO GMP data"
+          fi
+
+      - name: Push changes
+        run: |
+          git push origin HEAD:main
