@@ -1,530 +1,1094 @@
-```html
-<!DOCTYPE html>
+# ============================================================
+# IPO GMP SCRAPER
+# ============================================================
+#
+# Creates:
+#   1. ipo_gmp_result.csv
+#   2. ipo_gmp_history.csv
+#
+# Designed for:
+#   GitHub Actions
+#   30-minute scheduled execution
+#   IPO GMP Dashboard
+#
+# IMPORTANT:
+#   This file contains ONLY Python.
+#   Do not put HTML/CSS/JavaScript in this file.
+# ============================================================
 
-<html lang="en">
+import os
+import re
+import time
+from datetime import datetime
+from pathlib import Path
 
-<head>
+import pandas as pd
+from playwright.sync_api import sync_playwright
 
-    <meta charset="UTF-8">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-    <title>
-        IPO GMP Analysis Dashboard
-    </title>
+BASE_DIR = Path(__file__).resolve().parent
 
+RESULT_FILE = BASE_DIR / "ipo_gmp_result.csv"
+HISTORY_FILE = BASE_DIR / "ipo_gmp_history.csv"
 
-    <!-- Chart.js -->
+SOURCE_URL = "https://www.ipowatch.info/"
 
-    <script
-        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js">
-    </script>
+INDIA_TIMEZONE = "Asia/Kolkata"
 
 
-    <style>
+# ============================================================
+# HELPERS
+# ============================================================
 
-        * {
-            box-sizing: border-box;
-        }
+def clean_text(value):
+    """Clean spaces and unwanted characters."""
 
-        body {
+    if value is None:
+        return ""
 
-            margin: 0;
+    value = str(value)
 
-            font-family:
-                Arial,
-                Helvetica,
-                sans-serif;
+    value = value.replace("\xa0", " ")
+    value = re.sub(r"\s+", " ", value)
 
-            background: #f5f7fa;
+    return value.strip()
 
-            color: #222;
-        }
 
+def numeric_value(value):
+    """Extract first numeric value from text."""
 
-        .container {
+    if value is None:
+        return 0.0
 
-            width: 100%;
+    text = clean_text(value)
 
-            max-width: 1500px;
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
 
-            margin: auto;
+    if not match:
+        return 0.0
 
-            padding: 15px;
-        }
+    try:
+        return float(match.group())
+    except Exception:
+        return 0.0
 
 
-        h1 {
+def percentage_value(value):
+    """Extract percentage number."""
 
-            margin: 5px 0;
+    if value is None:
+        return 0.0
 
-            font-size: 28px;
-        }
+    text = clean_text(value)
 
+    match = re.search(r"-?\d+(?:\.\d+)?\s*%", text)
 
-        .subtitle {
+    if not match:
+        return 0.0
 
-            color: #666;
+    try:
+        return float(
+            re.search(r"-?\d+(?:\.\d+)?", match.group()).group()
+        )
+    except Exception:
+        return 0.0
 
-            margin-bottom: 15px;
-        }
 
+def normalize_name(name):
+    """Normalize IPO name for history matching."""
 
-        /* =====================================================
-           CONTROLS
-           ===================================================== */
+    name = clean_text(name)
 
-        .controls {
+    name = re.sub(
+        r"\bIPO\b",
+        "",
+        name,
+        flags=re.IGNORECASE
+    )
 
-            display: flex;
+    name = re.sub(
+        r"\bSME\b",
+        "",
+        name,
+        flags=re.IGNORECASE
+    )
 
-            flex-wrap: wrap;
+    name = re.sub(
+        r"\s+",
+        " ",
+        name
+    )
 
-            gap: 15px;
+    return name.strip()
 
-            margin-bottom: 15px;
-        }
 
+def parse_date(value):
+    """Try to convert different date formats."""
 
-        .control-group {
+    if not value:
+        return pd.NaT
 
-            flex: 1;
+    value = clean_text(value)
 
-            min-width: 250px;
-        }
+    formats = [
+        "%d-%b-%Y",
+        "%d-%B-%Y",
+        "%d %b %Y",
+        "%d %B %Y",
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+    ]
 
+    for fmt in formats:
 
-        label {
+        try:
+            return pd.to_datetime(
+                value,
+                format=fmt
+            )
+        except Exception:
+            pass
 
-            display: block;
+    try:
+        return pd.to_datetime(
+            value,
+            dayfirst=True,
+            errors="coerce"
+        )
+    except Exception:
+        return pd.NaT
 
-            font-weight: bold;
 
-            margin-bottom: 6px;
-        }
+def extract_date_from_text(text):
+    """Find a date inside a text field."""
 
+    if not text:
+        return pd.NaT
 
-        select,
-        input {
+    text = clean_text(text)
 
-            width: 100%;
+    patterns = [
+        r"\d{1,2}-[A-Za-z]{3}-\d{4}",
+        r"\d{1,2}-[A-Za-z]+-\d{4}",
+        r"\d{1,2}\s+[A-Za-z]{3}\s+\d{4}",
+        r"\d{1,2}\s+[A-Za-z]+\s+\d{4}",
+    ]
 
-            padding: 10px;
+    for pattern in patterns:
 
-            border: 1px solid #ccc;
+        match = re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE
+        )
 
-            border-radius: 6px;
+        if match:
 
-            background: white;
+            result = parse_date(
+                match.group()
+            )
 
-            font-size: 15px;
-        }
+            if not pd.isna(result):
+                return result
 
+    return pd.NaT
 
-        /* =====================================================
-           CHART
-           ===================================================== */
 
-        .chart-card {
+# ============================================================
+# GET TABLE FROM WEBSITE
+# ============================================================
 
-            background: white;
+def get_gmp_table(page):
+    """Find the IPO GMP table."""
 
-            border-radius: 10px;
+    tables = page.locator("table")
 
-            padding: 15px;
+    count = tables.count()
 
-            margin-bottom: 15px;
+    print(f"Tables found: {count}")
 
-            box-shadow:
-                0 2px 8px
-                rgba(0,0,0,0.08);
-        }
+    best_table = None
+    best_score = -1
 
+    for i in range(count):
 
-        .chart-header {
+        try:
 
-            display: flex;
+            table = tables.nth(i)
 
-            justify-content: space-between;
+            text = clean_text(
+                table.inner_text()
+            ).lower()
 
-            align-items: center;
+            score = 0
 
-            flex-wrap: wrap;
+            keywords = [
+                "gmp",
+                "ipo",
+                "price",
+                "listing",
+                "updated",
+            ]
 
-            margin-bottom: 5px;
-        }
+            for keyword in keywords:
 
+                if keyword in text:
+                    score += 1
 
-        .chart-header h2 {
+            if score > best_score:
 
-            margin: 0;
-        }
+                best_score = score
+                best_table = table
 
+        except Exception:
+            continue
 
-        .chart-container {
+    if best_table is None:
 
-            position: relative;
+        raise RuntimeError(
+            "Correct GMP table not found."
+        )
 
-            width: 100%;
+    print(
+        f"Selected GMP table with score: {best_score}"
+    )
 
-            height: 280px;
-        }
+    return best_table
 
 
-        /* =====================================================
-           STATUS
-           ===================================================== */
+# ============================================================
+# EXTRACT TABLE
+# ============================================================
 
-        .status {
+def extract_table_data(table):
 
-            padding: 10px;
+    rows = table.locator("tr")
 
-            margin-bottom: 15px;
+    row_count = rows.count()
 
-            background: white;
+    print(
+        f"Rows found in GMP table: {row_count}"
+    )
 
-            border-radius: 6px;
+    if row_count < 2:
 
-            color: #555;
-        }
+        raise RuntimeError(
+            "GMP table contains no data rows."
+        )
 
+    headers = []
 
-        /* =====================================================
-           TABLE
-           ===================================================== */
+    first_row = rows.nth(0)
 
-        .table-card {
+    header_cells = first_row.locator(
+        "th, td"
+    )
 
-            background: white;
+    for i in range(header_cells.count()):
 
-            border-radius: 10px;
+        headers.append(
+            clean_text(
+                header_cells.nth(i).inner_text()
+            )
+        )
 
-            padding: 10px;
+    print("Detected headers:")
+    print(headers)
 
-            box-shadow:
-                0 2px 8px
-                rgba(0,0,0,0.08);
-        }
+    data = []
 
+    for r in range(1, row_count):
 
-        .table-title {
+        row = rows.nth(r)
 
-            padding: 5px 10px;
+        cells = row.locator(
+            "td, th"
+        )
 
-            margin: 0;
-        }
+        cell_count = cells.count()
 
+        if cell_count == 0:
+            continue
 
-        .table-wrapper {
+        values = []
 
-            width: 100%;
+        for c in range(cell_count):
 
-            overflow-x: auto;
-        }
+            values.append(
+                clean_text(
+                    cells.nth(c).inner_text()
+                )
+            )
 
+        if not any(values):
+            continue
 
-        table {
+        # Make header/value lengths equal
+        if len(values) < len(headers):
 
-            width: 100%;
+            values.extend(
+                [""] *
+                (len(headers) - len(values))
+            )
 
-            border-collapse: collapse;
+        if len(values) > len(headers):
 
-            min-width: 1300px;
-        }
+            values = values[
+                :len(headers)
+            ]
 
+        row_dict = dict(
+            zip(
+                headers,
+                values
+            )
+        )
 
-        th {
+        data.append(row_dict)
 
-            background: #1f2937;
+    return data
 
-            color: white;
 
-            padding: 10px;
+# ============================================================
+# FIND COLUMN
+# ============================================================
 
-            text-align: left;
+def find_column(columns, keywords):
 
-            white-space: nowrap;
-        }
+    for column in columns:
 
+        lower = clean_text(
+            column
+        ).lower()
 
-        td {
+        for keyword in keywords:
 
-            padding: 9px;
+            if keyword in lower:
 
-            border-bottom:
-                1px solid #e5e7eb;
+                return column
 
-            white-space: nowrap;
-        }
+    return None
 
 
-        tbody tr:hover {
+# ============================================================
+# NORMALIZE GMP DATA
+# ============================================================
 
-            background: #f3f4f6;
-        }
+def normalize_data(raw_data):
 
+    if not raw_data:
+        return pd.DataFrame()
 
-        /* =====================================================
-           MOBILE
-           ===================================================== */
+    df = pd.DataFrame(raw_data)
 
-        @media (
-            max-width: 768px
-        ) {
+    print(
+        f"Raw columns: {list(df.columns)}"
+    )
 
-            .container {
+    ipo_col = find_column(
+        df.columns,
+        [
+            "ipo",
+            "company",
+            "name",
+        ]
+    )
 
-                padding: 10px;
+    gmp_col = find_column(
+        df.columns,
+        [
+            "gmp",
+        ]
+    )
+
+    gmp_percent_col = find_column(
+        df.columns,
+        [
+            "gmp %",
+            "gmp%",
+            "gain %",
+            "gain%",
+            "premium %",
+        ]
+    )
+
+    price_col = find_column(
+        df.columns,
+        [
+            "price",
+            "issue price",
+        ]
+    )
+
+    listing_col = find_column(
+        df.columns,
+        [
+            "listing",
+            "est. listing",
+            "estimated listing",
+        ]
+    )
+
+    updated_col = find_column(
+        df.columns,
+        [
+            "updated",
+            "last updated",
+        ]
+    )
+
+    print(
+        "IPO column:",
+        ipo_col
+    )
+
+    print(
+        "GMP column:",
+        gmp_col
+    )
+
+    print(
+        "GMP % column:",
+        gmp_percent_col
+    )
+
+    if ipo_col is None:
+
+        raise RuntimeError(
+            "IPO/company column not found."
+        )
+
+    if gmp_col is None:
+
+        raise RuntimeError(
+            "GMP column not found."
+        )
+
+    result = pd.DataFrame()
+
+    result["IPO Name"] = (
+        df[ipo_col]
+        .astype(str)
+        .map(clean_text)
+    )
+
+    result["GMP"] = (
+        df[gmp_col]
+        .astype(str)
+        .map(numeric_value)
+    )
+
+    if gmp_percent_col:
+
+        result["GMP %"] = (
+            df[gmp_percent_col]
+            .astype(str)
+            .map(percentage_value)
+        )
+
+    else:
+
+        if price_col:
+
+            prices = (
+                df[price_col]
+                .astype(str)
+                .map(numeric_value)
+            )
+
+            result["GMP %"] = 0.0
+
+            valid = prices > 0
+
+            result.loc[
+                valid,
+                "GMP %"
+            ] = (
+                result.loc[
+                    valid,
+                    "GMP"
+                ]
+                / prices.loc[valid]
+                * 100
+            )
+
+        else:
+
+            result["GMP %"] = 0.0
+
+    if price_col:
+
+        result["IPO Price"] = (
+            df[price_col]
+            .astype(str)
+            .map(numeric_value)
+        )
+
+    else:
+
+        result["IPO Price"] = 0.0
+
+    if listing_col:
+
+        result["Estimated Listing"] = (
+            df[listing_col]
+            .astype(str)
+            .map(numeric_value)
+        )
+
+    else:
+
+        result["Estimated Listing"] = (
+            result["IPO Price"]
+            + result["GMP"]
+        )
+
+    if updated_col:
+
+        result["Updated"] = (
+            df[updated_col]
+            .astype(str)
+            .map(clean_text)
+        )
+
+    else:
+
+        result["Updated"] = ""
+
+    # --------------------------------------------------------
+    # Remove empty IPO names
+    # --------------------------------------------------------
+
+    result = result[
+        result["IPO Name"].str.len() > 0
+    ].copy()
+
+    # --------------------------------------------------------
+    # Remove obvious table headers
+    # --------------------------------------------------------
+
+    result = result[
+        ~result["IPO Name"].str.lower().isin(
+            [
+                "ipo",
+                "company",
+                "name",
+                "ipo name",
+            ]
+        )
+    ].copy()
+
+    return result
+
+
+# ============================================================
+# EXTRACT ADDITIONAL IPO INFORMATION
+# ============================================================
+
+def add_ipo_dates(result):
+
+    result["Open"] = ""
+    result["Close"] = ""
+    result["BOA Date"] = ""
+    result["Listing Date"] = ""
+
+    # Try to find dates from links/details
+    # when available on the page.
+
+    return result
+
+
+# ============================================================
+# SAVE RESULT
+# ============================================================
+
+def save_result(df):
+
+    if df.empty:
+
+        raise RuntimeError(
+            "No IPO GMP data extracted."
+        )
+
+    # --------------------------------------------------------
+    # Clean names
+    # --------------------------------------------------------
+
+    df["IPO Name"] = (
+        df["IPO Name"]
+        .astype(str)
+        .map(clean_text)
+    )
+
+    # --------------------------------------------------------
+    # Numeric columns
+    # --------------------------------------------------------
+
+    for column in [
+        "GMP",
+        "GMP %",
+        "IPO Price",
+        "Estimated Listing",
+    ]:
+
+        if column in df.columns:
+
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            ).fillna(0)
+
+    # --------------------------------------------------------
+    # Calculate GMP %
+    # --------------------------------------------------------
+
+    valid = df["IPO Price"] > 0
+
+    df.loc[
+        valid &
+        (df["GMP %"] == 0),
+        "GMP %"
+    ] = (
+        df.loc[
+            valid &
+            (df["GMP %"] == 0),
+            "GMP"
+        ]
+        /
+        df.loc[
+            valid &
+            (df["GMP %"] == 0),
+            "IPO Price"
+        ]
+        * 100
+    )
+
+    # --------------------------------------------------------
+    # Calculate estimated listing
+    # --------------------------------------------------------
+
+    df["Estimated Listing"] = (
+        df["IPO Price"]
+        + df["GMP"]
+    )
+
+    # --------------------------------------------------------
+    # Add timestamp
+    # --------------------------------------------------------
+
+    now = pd.Timestamp.now(
+        tz=INDIA_TIMEZONE
+    )
+
+    df["Last Updated"] = (
+        now.strftime(
+            "%d-%b-%Y %H:%M"
+        )
+    )
+
+    # --------------------------------------------------------
+    # Sort
+    #
+    # Current dashboard should show newest IPOs first.
+    # If Listing Date exists, use it.
+    # Otherwise preserve scraper order.
+    # --------------------------------------------------------
+
+    if "Listing Date" in df.columns:
+
+        df["_listing_sort"] = (
+            df["Listing Date"]
+            .map(parse_date)
+        )
+
+        df = df.sort_values(
+            by="_listing_sort",
+            ascending=True,
+            na_position="last"
+        )
+
+        df = df.drop(
+            columns=["_listing_sort"]
+        )
+
+    # --------------------------------------------------------
+    # Remove duplicate IPOs
+    # --------------------------------------------------------
+
+    df = df.drop_duplicates(
+        subset=["IPO Name"],
+        keep="first"
+    )
+
+    # --------------------------------------------------------
+    # Save
+    # --------------------------------------------------------
+
+    df.to_csv(
+        RESULT_FILE,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(
+        f"Saved {len(df)} IPO records to:"
+    )
+
+    print(
+        RESULT_FILE
+    )
+
+
+# ============================================================
+# UPDATE HISTORY
+# ============================================================
+
+def update_history(current_df):
+
+    if current_df.empty:
+        return
+
+    now = pd.Timestamp.now(
+        tz=INDIA_TIMEZONE
+    )
+
+    history_rows = []
+
+    for _, row in current_df.iterrows():
+
+        history_rows.append(
+            {
+                "IPO Name":
+                    clean_text(
+                        row.get(
+                            "IPO Name",
+                            ""
+                        )
+                    ),
+
+                "GMP Numeric":
+                    float(
+                        row.get(
+                            "GMP",
+                            0
+                        )
+                    ),
+
+                "GMP %":
+                    float(
+                        row.get(
+                            "GMP %",
+                            0
+                        )
+                    ),
+
+                "Data Date":
+                    now.strftime(
+                        "%Y-%m-%d"
+                    ),
+
+                "Data Time":
+                    now.strftime(
+                        "%H:%M:%S"
+                    ),
+
+                "Last Updated":
+                    now.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
             }
+        )
 
+    new_history = pd.DataFrame(
+        history_rows
+    )
 
-            h1 {
+    # --------------------------------------------------------
+    # Existing history
+    # --------------------------------------------------------
 
-                font-size: 22px;
-            }
+    if HISTORY_FILE.exists():
 
+        try:
+
+            old_history = pd.read_csv(
+                HISTORY_FILE
+            )
+
+        except Exception:
 
-            .control-group {
+            old_history = pd.DataFrame()
+
+    else:
 
-                min-width: 100%;
-            }
+        old_history = pd.DataFrame()
+
+    # --------------------------------------------------------
+    # Combine
+    # --------------------------------------------------------
+
+    if not old_history.empty:
+
+        history = pd.concat(
+            [
+                old_history,
+                new_history
+            ],
+            ignore_index=True
+        )
 
+    else:
 
-            .chart-container {
+        history = new_history
 
-                height: 230px;
-            }
+    # --------------------------------------------------------
+    # Ensure correct columns
+    # --------------------------------------------------------
 
+    columns = [
+        "IPO Name",
+        "GMP Numeric",
+        "GMP %",
+        "Data Date",
+        "Data Time",
+        "Last Updated",
+    ]
 
-            .chart-header h2 {
+    for column in columns:
 
-                font-size: 18px;
-            }
+        if column not in history.columns:
 
-        }
+            history[column] = ""
 
+    history = history[
+        columns
+    ]
 
-        @media (
-            max-width: 480px
-        ) {
+    # --------------------------------------------------------
+    # Convert numeric columns
+    # --------------------------------------------------------
 
-            .chart-container {
+    history["GMP Numeric"] = pd.to_numeric(
+        history["GMP Numeric"],
+        errors="coerce"
+    ).fillna(0)
 
-                height: 210px;
-            }
+    history["GMP %"] = pd.to_numeric(
+        history["GMP %"],
+        errors="coerce"
+    ).fillna(0)
+
+    # --------------------------------------------------------
+    # Remove exact duplicate observations
+    #
+    # Same IPO + date + time + GMP
+    # --------------------------------------------------------
+
+    history = history.drop_duplicates(
+        subset=[
+            "IPO Name",
+            "Data Date",
+            "Data Time",
+            "GMP Numeric",
+            "GMP %",
+        ],
+        keep="last"
+    )
+
+    # --------------------------------------------------------
+    # Sort latest observation first
+    # --------------------------------------------------------
+
+    history["_datetime"] = pd.to_datetime(
+        history["Data Date"].astype(str)
+        + " "
+        + history["Data Time"].astype(str),
+        errors="coerce"
+    )
+
+    history = history.sort_values(
+        by="_datetime",
+        ascending=False
+    )
+
+    history = history.drop(
+        columns=["_datetime"]
+    )
+
+    # --------------------------------------------------------
+    # Save history
+    # --------------------------------------------------------
+
+    history.to_csv(
+        HISTORY_FILE,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print(
+        f"History records: {len(history)}"
+    )
+
+    print(
+        f"Saved history to: {HISTORY_FILE}"
+    )
+
+
+# ============================================================
+# SCRAPER
+# ============================================================
+
+def scrape():
+
+    print("=" * 70)
+    print("IPO GMP SCRAPER")
+    print("=" * 70)
+
+    print(
+        f"Source: {SOURCE_URL}"
+    )
+
+    print(
+        f"Result: {RESULT_FILE}"
+    )
+
+    print(
+        f"History: {HISTORY_FILE}"
+    )
+
+    with sync_playwright() as p:
+
+        browser = p.chromium.launch(
+            headless=True
+        )
+
+        page = browser.new_page(
+            viewport={
+                "width": 1920,
+                "height": 1080,
+            },
+
+            user_agent=(
+                "Mozilla/5.0 "
+                "(X11; Linux x86_64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/131.0.0.0 "
+                "Safari/537.36"
+            ),
+        )
 
-        }
+        try:
 
-    </style>
+            print(
+                "Opening IPO GMP website..."
+            )
 
-</head>
+            page.goto(
+                SOURCE_URL,
+                wait_until="domcontentloaded",
+                timeout=120000
+            )
 
+            page.wait_for_timeout(
+                5000
+            )
 
-<body>
+            print(
+                "Page loaded:"
+            )
 
+            print(
+                page.title()
+            )
 
-<div class="container">
+            # ------------------------------------------------
+            # Get GMP table
+            # ------------------------------------------------
 
+            table = get_gmp_table(
+                page
+            )
 
-    <!-- =====================================================
-         HEADER
-         ===================================================== -->
+            # ------------------------------------------------
+            # Extract
+            # ------------------------------------------------
 
-    <h1>
-        📊 IPO GMP Analysis Dashboard
-    </h1>
+            raw_data = extract_table_data(
+                table
+            )
 
+            print(
+                f"Raw records extracted: "
+                f"{len(raw_data)}"
+            )
 
-    <div class="subtitle">
+            # ------------------------------------------------
+            # Normalize
+            # ------------------------------------------------
 
-        Live IPO Grey Market Premium & GMP Trend
+            result = normalize_data(
+                raw_data
+            )
 
-    </div>
+            # ------------------------------------------------
+            # Add date fields
+            # ------------------------------------------------
 
+            result = add_ipo_dates(
+                result
+            )
 
-    <!-- =====================================================
-         CONTROLS
-         ===================================================== -->
+            # ------------------------------------------------
+            # Save result
+            # ------------------------------------------------
 
-    <div class="controls">
+            save_result(
+                result
+            )
 
+            # ------------------------------------------------
+            # Update history
+            # ------------------------------------------------
 
-        <div class="control-group">
+            update_history(
+                result
+            )
 
-            <label for="ipoSelect">
-                GMP Trend
-            </label>
+            print("=" * 70)
+            print(
+                "SCRAPER COMPLETED SUCCESSFULLY"
+            )
+            print("=" * 70)
 
+        finally:
 
-            <select id="ipoSelect">
+            browser.close()
 
-                <option value="">
-                    Select IPO
-                </option>
 
-            </select>
+# ============================================================
+# MAIN
+# ============================================================
 
-        </div>
+if __name__ == "__main__":
 
+    try:
 
-        <div class="control-group">
+        scrape()
 
-            <label for="searchBox">
-                Search IPO
-            </label>
+    except Exception as error:
 
+        print("=" * 70)
+        print("SCRAPER FAILED")
+        print("=" * 70)
 
-            <input
-                type="text"
-                id="searchBox"
-                placeholder="Search IPO..."
-            >
+        print(
+            f"{type(error).__name__}: {error}"
+        )
 
-        </div>
-
-
-    </div>
-
-
-    <!-- =====================================================
-         CHART
-         ===================================================== -->
-
-    <div class="chart-card">
-
-
-        <div class="chart-header">
-
-            <div>
-
-                <h2 id="chartTitle">
-                    GMP % Trend
-                </h2>
-
-                <small>
-                    X-axis: Date |
-                    Y-axis: GMP %
-                </small>
-
-            </div>
-
-        </div>
-
-
-        <div class="chart-container">
-
-            <canvas
-                id="gmpChart">
-            </canvas>
-
-        </div>
-
-
-    </div>
-
-
-    <!-- =====================================================
-         STATUS
-         ===================================================== -->
-
-    <div
-        class="status"
-        id="status">
-
-        Loading GMP data...
-
-    </div>
-
-
-    <!-- =====================================================
-         CURRENT IPO TABLE
-         ===================================================== -->
-
-    <div class="table-card">
-
-
-        <h2 class="table-title">
-
-            Current IPO GMP
-
-        </h2>
-
-
-        <div class="table-wrapper">
-
-
-            <table>
-
-
-                <thead>
-
-                    <tr>
-
-                        <th>IPO Name</th>
-
-                        <th>GMP</th>
-
-                        <th>GMP %</th>
-
-                        <th>GMP Down</th>
-
-                        <th>GMP Up</th>
-
-                        <th>Subscription</th>
-
-                        <th>IPO Price</th>
-
-                        <th>IPO Size</th>
-
-                        <th>Lot Size</th>
-
-                        <th>Open</th>
-
-                        <th>Close</th>
-
-                        <th>BOA Date</th>
-
-                        <th>Listing Date</th>
-
-                        <th>Updated</th>
-
-                        <th>Anchor</th>
-
-                        <th>Estimated Listing</th>
-
-                    </tr>
-
-                </thead>
-
-
-                <tbody
-                    id="ipoTableBody">
-                </tbody>
-
-
-            </table>
-
-
-        </div>
-
-
-    </div>
-
-
-</div>
-
-
-<!-- =========================================================
-     JAVASCRIPT
-     ========================================================= -->
-
-<script src="script.js"></script>
-
-
-</body>
-
-</html>
-```
+        raise
