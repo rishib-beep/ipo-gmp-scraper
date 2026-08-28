@@ -15,22 +15,20 @@ concurrency:
 
 jobs:
   scrape:
-
     runs-on: ubuntu-latest
 
     steps:
 
       # ============================================================
-      # 1. Checkout repository
+      # CHECKOUT
       # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          persist-credentials: true
 
       # ============================================================
-      # 2. Setup Python
+      # PYTHON
       # ============================================================
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -39,7 +37,7 @@ jobs:
           cache: "pip"
 
       # ============================================================
-      # 3. Install Python packages
+      # INSTALL PYTHON PACKAGES
       # ============================================================
       - name: Install Python packages
         run: |
@@ -52,14 +50,14 @@ jobs:
           pip install google-auth-httplib2
 
       # ============================================================
-      # 4. Install Chromium
+      # INSTALL PLAYWRIGHT
       # ============================================================
       - name: Install Playwright Chromium
         run: |
           python -m playwright install --with-deps chromium
 
       # ============================================================
-      # 5. Run IPO GMP scraper
+      # RUN SCRAPER
       # ============================================================
       - name: Run IPO GMP scraper
         env:
@@ -69,38 +67,42 @@ jobs:
           python ipo_gmp_scraper.py
 
       # ============================================================
-      # 6. Check generated files
+      # SHOW CHANGES
       # ============================================================
       - name: Check generated files
         run: |
-          echo "Files changed by scraper:"
+          echo "========================================"
+          echo "GIT STATUS"
+          echo "========================================"
           git status --short
 
           echo ""
-          echo "Repository files:"
+          echo "========================================"
+          echo "FILES"
+          echo "========================================"
           ls -lah
 
       # ============================================================
-      # 7. Commit and push CSV
+      # COMMIT AND PUSH
       # ============================================================
-      - name: Commit updated CSV
+      - name: Commit and push updated CSV
         run: |
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Make sure we are working with the latest remote main branch
+          # Get latest remote changes
           git fetch origin main
 
-          # Rebase our generated changes on top of latest main
-          git pull --rebase origin main
+          # Rebase on latest main
+          git rebase origin/main
 
-          # Add CSV/data files
+          # Add generated files
           git add .
 
-          # Check whether anything changed
+          # Check if there are changes
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes detected."
             exit 0
           fi
 
