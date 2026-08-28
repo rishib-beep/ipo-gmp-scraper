@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 
 <html lang="en">
@@ -32,9 +33,7 @@
 ===================================================== */
 
 * {
-
     box-sizing: border-box;
-
 }
 
 
@@ -292,7 +291,7 @@ input:focus {
         100%;
 
     height:
-        280px;
+        320px;
 
 }
 
@@ -540,10 +539,18 @@ td:nth-child(3) {
     }
 
 
+    .chart-header > p {
+
+        margin-top:
+            7px;
+
+    }
+
+
     .chart-container {
 
         height:
-            230px;
+            250px;
 
     }
 
@@ -569,7 +576,7 @@ td:nth-child(3) {
     .chart-container {
 
         height:
-            210px;
+            220px;
 
     }
 
@@ -630,6 +637,8 @@ td:nth-child(3) {
 <div class="controls">
 
 
+    <!-- IPO SELECT -->
+
     <div class="control-group">
 
         <label for="ipoSelect">
@@ -646,6 +655,8 @@ td:nth-child(3) {
 
     </div>
 
+
+    <!-- SEARCH -->
 
     <div class="control-group">
 
@@ -682,7 +693,7 @@ td:nth-child(3) {
             </h2>
 
             <p>
-                GMP history from available IPO dates
+                Daily GMP history connected chronologically
             </p>
 
         </div>
@@ -723,7 +734,7 @@ td:nth-child(3) {
 
 
 <!-- =====================================================
-     TABLE
+     CURRENT IPO TABLE
 ===================================================== -->
 
 <h2 class="section-title">
@@ -736,62 +747,96 @@ td:nth-child(3) {
 <div class="table-card">
 
 
-<div class="table-wrapper">
+    <div class="table-wrapper">
 
 
-<table>
+        <table>
 
 
-<thead>
+            <thead>
 
-<tr>
+                <tr>
 
-<th>IPO Name</th>
+                    <th>
+                        IPO Name
+                    </th>
 
-<th>GMP</th>
+                    <th>
+                        GMP
+                    </th>
 
-<th>GMP %</th>
+                    <th>
+                        GMP %
+                    </th>
 
-<th>GMP Down</th>
+                    <th>
+                        GMP Down
+                    </th>
 
-<th>GMP Up</th>
+                    <th>
+                        GMP Up
+                    </th>
 
-<th>Subscription</th>
+                    <th>
+                        Subscription
+                    </th>
 
-<th>IPO Price</th>
+                    <th>
+                        IPO Price
+                    </th>
 
-<th>IPO Size</th>
+                    <th>
+                        IPO Size
+                    </th>
 
-<th>Lot Size</th>
+                    <th>
+                        Lot Size
+                    </th>
 
-<th>Open</th>
+                    <th>
+                        Open
+                    </th>
 
-<th>Close</th>
+                    <th>
+                        Close
+                    </th>
 
-<th>BOA Date</th>
+                    <th>
+                        BOA Date
+                    </th>
 
-<th>Listing Date</th>
+                    <th>
+                        Listing Date
+                    </th>
 
-<th>Updated</th>
+                    <th>
+                        Updated
+                    </th>
 
-<th>Anchor</th>
+                    <th>
+                        Anchor
+                    </th>
 
-<th>Estimated Listing</th>
+                    <th>
+                        Estimated Listing
+                    </th>
 
-</tr>
+                </tr>
 
-</thead>
-
-
-<tbody id="ipoTableBody">
-
-</tbody>
-
-
-</table>
+            </thead>
 
 
-</div>
+            <tbody
+                id="ipoTableBody"
+            >
+            </tbody>
+
+
+        </table>
+
+
+    </div>
+
 
 </div>
 
@@ -800,7 +845,7 @@ td:nth-child(3) {
 
 
 <!-- =====================================================
-     SCRIPT
+     JAVASCRIPT
 ===================================================== -->
 
 <script
@@ -811,3 +856,4 @@ td:nth-child(3) {
 </body>
 
 </html>
+```
