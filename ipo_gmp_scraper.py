@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 
 
 # ============================================================
-# CONFIG
+# CONFIGURATION
 # ============================================================
 
 URL = "https://www.investorgain.com/report/ipo-gmp-live/331/"
@@ -17,12 +17,16 @@ CURRENT_FILE = "ipo_gmp_result.csv"
 HISTORY_FILE = "ipo_gmp_history.csv"
 
 NOW = datetime.now()
+
 TODAY = NOW.strftime("%Y-%m-%d")
-UPDATED_TIME = NOW.strftime("%Y-%m-%d %H:%M:%S")
+
+UPDATED_TIME = NOW.strftime(
+    "%Y-%m-%d %H:%M:%S"
+)
 
 
 # ============================================================
-# BASIC HELPERS
+# HELPERS
 # ============================================================
 
 def clean_text(value):
@@ -31,8 +35,17 @@ def clean_text(value):
         return ""
 
     value = str(value)
-    value = value.replace("\xa0", " ")
-    value = re.sub(r"\s+", " ", value)
+
+    value = value.replace(
+        "\xa0",
+        " "
+    )
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value
+    )
 
     return value.strip()
 
@@ -42,16 +55,26 @@ def number(value):
     if value is None:
         return None
 
+    text = str(value)
+
+    text = text.replace(
+        ",",
+        ""
+    )
+
     match = re.search(
         r"-?\d+(?:\.\d+)?",
-        str(value).replace(",", "")
+        text
     )
 
     if not match:
         return None
 
     try:
-        return float(match.group())
+        return float(
+            match.group()
+        )
+
     except Exception:
         return None
 
@@ -69,7 +92,9 @@ def extract_gmp(value):
     )
 
     if match:
-        return float(match.group(1))
+        return float(
+            match.group(1)
+        )
 
     return None
 
@@ -85,7 +110,9 @@ def extract_gmp_percent(value):
     )
 
     if match:
-        return float(match.group(1))
+        return float(
+            match.group(1)
+        )
 
     return None
 
@@ -117,7 +144,6 @@ def clean_ipo_name(name):
     if not name:
         return ""
 
-    # Remove InvestorGain status suffixes
     name = re.sub(
         r"(CALLOTTED|CLOSED|OPEN|IPO)$",
         "",
@@ -128,7 +154,10 @@ def clean_ipo_name(name):
     return name.strip()
 
 
-def find_column(columns, candidates):
+def find_column(
+    columns,
+    candidates
+):
 
     for column in columns:
 
@@ -138,20 +167,32 @@ def find_column(columns, candidates):
 
         for candidate in candidates:
 
-            if candidate.upper() == column_clean:
+            if (
+                candidate.upper()
+                == column_clean
+            ):
+
                 return column
 
     return None
 
 
 # ============================================================
-# SCRAPE
+# SCRAPE INVESTORGAIN
 # ============================================================
 
 async def scrape_investorgain():
 
     print("=" * 90)
-    print("OPENING INVESTORGAIN")
+
+    print(
+        "OPENING INVESTORGAIN"
+    )
+
+    print(
+        URL
+    )
+
     print("=" * 90)
 
     async with async_playwright() as p:
@@ -160,7 +201,19 @@ async def scrape_investorgain():
             headless=True
         )
 
-        page = await browser.new_page()
+        page = await browser.new_page(
+            viewport={
+                "width": 1440,
+                "height": 1200
+            },
+            user_agent=(
+                "Mozilla/5.0 "
+                "(X11; Linux x86_64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/131 Safari/537.36"
+            )
+        )
 
         try:
 
@@ -170,10 +223,19 @@ async def scrape_investorgain():
                 timeout=120000
             )
 
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(
+                7000
+            )
 
-            print("Page:", page.url)
-            print("Title:", await page.title())
+            print(
+                "Page:",
+                page.url
+            )
+
+            print(
+                "Title:",
+                await page.title()
+            )
 
             tables = await page.locator(
                 "table"
@@ -186,7 +248,10 @@ async def scrape_investorgain():
 
             final_rows = []
 
-            for table_number, table in enumerate(tables):
+            for table_number, table in enumerate(
+                tables,
+                start=1
+            ):
 
                 rows = await table.locator(
                     "tr"
@@ -207,14 +272,25 @@ async def scrape_investorgain():
 
                     for cell in cells:
 
-                        text = await cell.inner_text()
+                        try:
+
+                            text = await cell.inner_text()
+
+                        except Exception:
+
+                            text = ""
 
                         values.append(
-                            clean_text(text)
+                            clean_text(
+                                text
+                            )
                         )
 
                     if values:
-                        table_data.append(values)
+
+                        table_data.append(
+                            values
+                        )
 
                 if len(table_data) < 2:
                     continue
@@ -227,16 +303,30 @@ async def scrape_investorgain():
 
                 print()
                 print(
-                    f"TABLE {table_number + 1}"
+                    f"TABLE {table_number}"
                 )
 
-                print(header)
+                print(
+                    header
+                )
 
-                # Correct GMP table detection
+                # ------------------------------------------------
+                # Correct GMP table
+                # ------------------------------------------------
+
+                if "GMP" not in header_text:
+
+                    continue
+
+                if "PRICE" not in header_text:
+
+                    continue
+
                 if (
-                    "GMP" not in header_text
-                    or "PRICE" not in header_text
+                    "IPO" not in header_text
+                    and "NAME" not in header_text
                 ):
+
                     continue
 
                 print(
@@ -248,15 +338,26 @@ async def scrape_investorgain():
                     row = row[:len(header)]
 
                     while len(row) < len(header):
+
                         row.append("")
 
                     record = dict(
-                        zip(header, row)
+                        zip(
+                            header,
+                            row
+                        )
                     )
 
-                    final_rows.append(record)
+                    final_rows.append(
+                        record
+                    )
 
             await browser.close()
+
+            print(
+                "Scraped records:",
+                len(final_rows)
+            )
 
             return final_rows
 
@@ -274,6 +375,7 @@ async def scrape_investorgain():
 def create_dataframe(rows):
 
     if not rows:
+
         return pd.DataFrame()
 
     columns = list(
@@ -282,12 +384,17 @@ def create_dataframe(rows):
 
     name_col = find_column(
         columns,
-        ["IPO Name", "Name"]
+        [
+            "IPO Name",
+            "Name"
+        ]
     )
 
     gmp_col = find_column(
         columns,
-        ["GMP"]
+        [
+            "GMP"
+        ]
     )
 
     price_col = find_column(
@@ -309,7 +416,9 @@ def create_dataframe(rows):
 
     ipo_size_col = find_column(
         columns,
-        ["IPO Size"]
+        [
+            "IPO Size"
+        ]
     )
 
     lot_col = find_column(
@@ -322,12 +431,16 @@ def create_dataframe(rows):
 
     open_col = find_column(
         columns,
-        ["Open"]
+        [
+            "Open"
+        ]
     )
 
     close_col = find_column(
         columns,
-        ["Close"]
+        [
+            "Close"
+        ]
     )
 
     boa_col = find_column(
@@ -356,12 +469,16 @@ def create_dataframe(rows):
 
     anchor_col = find_column(
         columns,
-        ["Anchor"]
+        [
+            "Anchor"
+        ]
     )
 
     rating_col = find_column(
         columns,
-        ["Rating"]
+        [
+            "Rating"
+        ]
     )
 
     records = []
@@ -369,16 +486,23 @@ def create_dataframe(rows):
     for row in rows:
 
         name = clean_ipo_name(
-            row.get(name_col, "")
+            row.get(
+                name_col,
+                ""
+            )
             if name_col
             else ""
         )
 
         if not name:
+
             continue
 
         raw_gmp = (
-            row.get(gmp_col, "")
+            row.get(
+                gmp_col,
+                ""
+            )
             if gmp_col
             else ""
         )
@@ -387,29 +511,38 @@ def create_dataframe(rows):
             raw_gmp
         )
 
-        website_gmp_percent = (
+        website_percent = (
             extract_gmp_percent(
                 raw_gmp
             )
         )
 
-        gmp_down, gmp_up = extract_down_up(
-            raw_gmp
+        gmp_down, gmp_up = (
+            extract_down_up(
+                raw_gmp
+            )
         )
 
         ipo_price = number(
-            row.get(price_col, "")
+            row.get(
+                price_col,
+                ""
+            )
             if price_col
             else ""
         )
 
+        if ipo_price is None:
+
+            ipo_price = 0
+
+        if gmp is None:
+
+            gmp = 0
+
         calculated_percent = 0
 
-        if (
-            gmp is not None
-            and ipo_price
-            and ipo_price > 0
-        ):
+        if ipo_price > 0:
 
             calculated_percent = (
                 gmp /
@@ -418,140 +551,147 @@ def create_dataframe(rows):
             )
 
         gmp_percent = (
-            website_gmp_percent
-            if website_gmp_percent is not None
+            website_percent
+            if website_percent is not None
             else calculated_percent
         )
 
-        estimated_listing = 0
-
-        if (
-            gmp is not None
-            and ipo_price is not None
-        ):
-
-            estimated_listing = (
-                ipo_price + gmp
-            )
+        estimated_listing = (
+            ipo_price +
+            gmp
+        )
 
         records.append({
 
-            "IPO Name": name,
+            "IPO Name":
+                name,
 
-            "GMP": (
-                gmp
-                if gmp is not None
-                else 0
-            ),
+            "GMP":
+                round(
+                    gmp,
+                    2
+                ),
 
-            "GMP %": round(
-                gmp_percent,
-                2
-            ),
+            "GMP %":
+                round(
+                    gmp_percent,
+                    2
+                ),
 
-            "GMP Down": (
-                gmp_down
-                if gmp_down is not None
-                else 0
-            ),
+            "GMP Down":
+                (
+                    gmp_down
+                    if gmp_down is not None
+                    else 0
+                ),
 
-            "GMP Up": (
-                gmp_up
-                if gmp_up is not None
-                else 0
-            ),
+            "GMP Up":
+                (
+                    gmp_up
+                    if gmp_up is not None
+                    else 0
+                ),
 
-            "Subscription": (
-                row.get(
-                    subscription_col,
-                    ""
-                )
-                if subscription_col
-                else ""
-            ),
-
-            "IPO Price": (
-                ipo_price
-                if ipo_price is not None
-                else 0
-            ),
-
-            "IPO Size": (
-                row.get(
-                    ipo_size_col,
-                    ""
-                )
-                if ipo_size_col
-                else ""
-            ),
-
-            "Lot Size": (
-                number(
+            "Subscription":
+                (
                     row.get(
-                        lot_col,
+                        subscription_col,
                         ""
                     )
-                )
-                if lot_col
-                else ""
-            ),
+                    if subscription_col
+                    else ""
+                ),
 
-            "Open": (
-                row.get(
-                    open_col,
-                    ""
-                )
-                if open_col
-                else ""
-            ),
+            "IPO Price":
+                ipo_price,
 
-            "Close": (
-                row.get(
-                    close_col,
-                    ""
-                )
-                if close_col
-                else ""
-            ),
+            "IPO Size":
+                (
+                    row.get(
+                        ipo_size_col,
+                        ""
+                    )
+                    if ipo_size_col
+                    else ""
+                ),
 
-            "BOA Date": (
-                row.get(
-                    boa_col,
-                    ""
-                )
-                if boa_col
-                else ""
-            ),
+            "Lot Size":
+                (
+                    number(
+                        row.get(
+                            lot_col,
+                            ""
+                        )
+                    )
+                    if lot_col
+                    else ""
+                ),
 
-            "Listing Date": (
-                row.get(
-                    listing_col,
-                    ""
-                )
-                if listing_col
-                else ""
-            ),
+            "Open":
+                (
+                    row.get(
+                        open_col,
+                        ""
+                    )
+                    if open_col
+                    else ""
+                ),
 
-            "Updated": (
-                row.get(
-                    updated_col,
-                    UPDATED_TIME
-                )
-                if updated_col
-                else UPDATED_TIME
-            ),
+            "Close":
+                (
+                    row.get(
+                        close_col,
+                        ""
+                    )
+                    if close_col
+                    else ""
+                ),
 
-            "Anchor": (
-                row.get(
-                    anchor_col,
-                    ""
-                )
-                if anchor_col
-                else ""
-            ),
+            "BOA Date":
+                (
+                    row.get(
+                        boa_col,
+                        ""
+                    )
+                    if boa_col
+                    else ""
+                ),
+
+            "Listing Date":
+                (
+                    row.get(
+                        listing_col,
+                        ""
+                    )
+                    if listing_col
+                    else ""
+                ),
+
+            "Updated":
+                (
+                    row.get(
+                        updated_col,
+                        UPDATED_TIME
+                    )
+                    if updated_col
+                    else UPDATED_TIME
+                ),
+
+            "Anchor":
+                (
+                    row.get(
+                        anchor_col,
+                        ""
+                    )
+                    if anchor_col
+                    else ""
+                ),
 
             "Estimated Listing Price":
-                estimated_listing,
+                round(
+                    estimated_listing,
+                    2
+                ),
 
             "Calculated GMP %":
                 round(
@@ -559,19 +699,112 @@ def create_dataframe(rows):
                     2
                 ),
 
-            "Rating": (
-                row.get(
-                    rating_col,
-                    ""
+            "Rating":
+                (
+                    row.get(
+                        rating_col,
+                        ""
+                    )
+                    if rating_col
+                    else ""
                 )
-                if rating_col
-                else ""
-            )
+
         })
 
     return pd.DataFrame(
         records
     )
+
+
+# ============================================================
+# DATE PARSER
+# ============================================================
+
+def parse_listing_date(value):
+
+    if not value:
+
+        return pd.Timestamp.min
+
+    text = clean_text(
+        value
+    )
+
+    # Remove GMP text
+    text = re.sub(
+        r"\s*GMP\s*:.*",
+        "",
+        text,
+        flags=re.IGNORECASE
+    ).strip()
+
+    patterns = [
+
+        r"(\d{1,2})[-/](\d{1,2})[-/](\d{4})",
+
+        r"(\d{1,2})[-/]([A-Za-z]{3,9})[-/](\d{4})",
+
+        r"(\d{1,2})[-/]([A-Za-z]{3,9})",
+
+        r"(\d{1,2})[-/](\d{1,2})"
+
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text
+        )
+
+        if not match:
+
+            continue
+
+        try:
+
+            groups = match.groups()
+
+            day = int(
+                groups[0]
+            )
+
+            second = groups[1]
+
+            if second.isdigit():
+
+                month = int(
+                    second
+                )
+
+            else:
+
+                month = pd.to_datetime(
+                    second[:3],
+                    format="%b"
+                ).month
+
+            if len(groups) >= 3 and groups[2]:
+
+                year = int(
+                    groups[2]
+                )
+
+            else:
+
+                year = NOW.year
+
+            return pd.Timestamp(
+                year=year,
+                month=month,
+                day=day
+            )
+
+        except Exception:
+
+            continue
+
+    return pd.Timestamp.min
 
 
 # ============================================================
@@ -581,78 +814,33 @@ def create_dataframe(rows):
 def save_current(df):
 
     if df.empty:
+
         return
 
-    # --------------------------------------------------------
-    # Try sorting by listing date
-    # --------------------------------------------------------
-
-    def get_date(value):
-
-        if not value:
-            return pd.Timestamp.min
-
-        text = str(value)
-
-        patterns = [
-            r"(\d{1,2})[-/](\d{1,2})",
-            r"(\d{1,2})[-/]([A-Za-z]{3})"
-        ]
-
-        for pattern in patterns:
-
-            match = re.search(
-                pattern,
-                text
-            )
-
-            if not match:
-                continue
-
-            try:
-
-                if match.group(2).isdigit():
-
-                    return pd.Timestamp(
-                        year=NOW.year,
-                        month=int(
-                            match.group(2)
-                        ),
-                        day=int(
-                            match.group(1)
-                        )
-                    )
-
-                month = pd.to_datetime(
-                    match.group(2)[:3],
-                    format="%b"
-                ).month
-
-                return pd.Timestamp(
-                    year=NOW.year,
-                    month=month,
-                    day=int(
-                        match.group(1)
-                    )
-                )
-
-            except Exception:
-                pass
-
-        return pd.Timestamp.min
+    df = df.copy()
 
     df["_sort_date"] = (
         df["Listing Date"]
-        .apply(get_date)
+        .apply(
+            parse_listing_date
+        )
     )
 
     df = df.sort_values(
-        "_sort_date",
-        ascending=False
+        [
+            "_sort_date",
+            "IPO Name"
+        ],
+        ascending=[
+            False,
+            True
+        ]
     )
 
     df = df.drop(
-        columns=["_sort_date"]
+        columns=[
+            "_sort_date"
+        ]
     )
 
     df.to_csv(
@@ -661,7 +849,6 @@ def save_current(df):
         encoding="utf-8-sig"
     )
 
-    print()
     print(
         "✓ Current CSV saved:",
         CURRENT_FILE
@@ -675,10 +862,11 @@ def save_current(df):
 def update_history(df):
 
     if df.empty:
+
         return
 
     # --------------------------------------------------------
-    # Read old history
+    # Existing history
     # --------------------------------------------------------
 
     if os.path.exists(
@@ -699,7 +887,6 @@ def update_history(df):
 
         history = pd.DataFrame()
 
-
     # --------------------------------------------------------
     # Current observation
     # --------------------------------------------------------
@@ -708,48 +895,39 @@ def update_history(df):
 
     for _, row in df.iterrows():
 
-        ipo_name = str(
-            row["IPO Name"]
-        ).strip()
-
-        gmp = float(
-            row["GMP"]
-        )
-
-        gmp_percent = float(
-            row["GMP %"]
-        )
-
-        ipo_price = float(
-            row["IPO Price"]
-        )
-
         new_rows.append({
 
             "IPO Name":
-                ipo_name,
+                str(
+                    row["IPO Name"]
+                ).strip(),
 
             "Date":
                 TODAY,
 
             "GMP":
-                gmp,
+                float(
+                    row["GMP"]
+                ),
 
             "GMP %":
-                gmp_percent,
+                float(
+                    row["GMP %"]
+                ),
 
             "IPO Price":
-                ipo_price,
+                float(
+                    row["IPO Price"]
+                ),
 
             "Updated":
                 UPDATED_TIME
-        })
 
+        })
 
     new_df = pd.DataFrame(
         new_rows
     )
-
 
     # --------------------------------------------------------
     # Combine
@@ -769,7 +947,6 @@ def update_history(df):
             ignore_index=True
         )
 
-
     # --------------------------------------------------------
     # Clean
     # --------------------------------------------------------
@@ -786,11 +963,6 @@ def update_history(df):
         .str.strip()
     )
 
-
-    # --------------------------------------------------------
-    # Numeric fields
-    # --------------------------------------------------------
-
     history["GMP"] = pd.to_numeric(
         history["GMP"],
         errors="coerce"
@@ -806,9 +978,8 @@ def update_history(df):
         errors="coerce"
     ).fillna(0)
 
-
     # --------------------------------------------------------
-    # Keep latest observation for each IPO/date
+    # ONE ROW PER IPO PER DAY
     # --------------------------------------------------------
 
     history = history.drop_duplicates(
@@ -819,9 +990,8 @@ def update_history(df):
         keep="last"
     )
 
-
     # --------------------------------------------------------
-    # Sort by IPO + date
+    # Sort
     # --------------------------------------------------------
 
     history["_date"] = pd.to_datetime(
@@ -841,12 +1011,13 @@ def update_history(df):
     )
 
     history = history.drop(
-        columns=["_date"]
+        columns=[
+            "_date"
+        ]
     )
 
-
     # --------------------------------------------------------
-    # Save
+    # SAVE
     # --------------------------------------------------------
 
     history.to_csv(
@@ -855,7 +1026,6 @@ def update_history(df):
         encoding="utf-8-sig"
     )
 
-    print()
     print(
         "✓ History CSV saved:",
         HISTORY_FILE
@@ -915,11 +1085,15 @@ async def main():
         len(df)
     )
 
-    # Current data
-    save_current(df)
+    # Current CSV
+    save_current(
+        df
+    )
 
-    # Historical data
-    update_history(df)
+    # Historical CSV
+    update_history(
+        df
+    )
 
     print()
     print("=" * 90)
