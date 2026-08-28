@@ -1,19 +1,17 @@
+```yaml
 name: IPO GMP Scraper
 
 on:
 
+  # Manual run
   workflow_dispatch:
 
+  # Every 30 minutes
   schedule:
     - cron: "*/30 * * * *"
 
 
-# Prevent two scraper runs from pushing at the same time
-concurrency:
-  group: ipo-gmp-scraper
-  cancel-in-progress: false
-
-
+# Required for committing CSV files
 permissions:
   contents: write
 
@@ -22,16 +20,14 @@ jobs:
 
   scrape:
 
-    name: Scrape IPO GMP
-
     runs-on: ubuntu-latest
 
 
     steps:
 
-      # ======================================================
+      # =====================================================
       # 1. CHECKOUT
-      # ======================================================
+      # =====================================================
 
       - name: Checkout repository
 
@@ -41,12 +37,13 @@ jobs:
 
           fetch-depth: 0
 
-          ref: main
+          # Prevent checkout from becoming detached
+          persist-credentials: true
 
 
-      # ======================================================
+      # =====================================================
       # 2. SETUP PYTHON
-      # ======================================================
+      # =====================================================
 
       - name: Setup Python
 
@@ -59,9 +56,9 @@ jobs:
           cache: "pip"
 
 
-      # ======================================================
+      # =====================================================
       # 3. INSTALL DEPENDENCIES
-      # ======================================================
+      # =====================================================
 
       - name: Install dependencies
 
@@ -72,9 +69,9 @@ jobs:
           pip install -r requirements.txt
 
 
-      # ======================================================
+      # =====================================================
       # 4. INSTALL PLAYWRIGHT
-      # ======================================================
+      # =====================================================
 
       - name: Install Playwright Chromium
 
@@ -83,9 +80,9 @@ jobs:
           python -m playwright install --with-deps chromium
 
 
-      # ======================================================
+      # =====================================================
       # 5. RUN SCRAPER
-      # ======================================================
+      # =====================================================
 
       - name: Run IPO GMP scraper
 
@@ -94,67 +91,89 @@ jobs:
           python ipo_gmp_scraper.py
 
 
-      # ======================================================
-      # 6. SHOW GENERATED FILES
-      # ======================================================
+      # =====================================================
+      # 6. CHECK OUTPUT
+      # =====================================================
 
-      - name: Show generated files
+      - name: Check generated files
 
         run: |
 
           echo "======================================"
 
-          echo "Generated CSV files"
+          echo "Repository files:"
+
+          ls -lah
 
           echo "======================================"
 
-          ls -lh *.csv || true
+          echo "CSV files:"
 
-          echo ""
+          find . -maxdepth 2 -type f \
+            -name "*.csv" \
+            -print
 
-          echo "Current CSV rows:"
+          echo "======================================"
 
-          if [ -f ipo_gmp_result.csv ]; then
-            wc -l ipo_gmp_result.csv
+          if [ ! -f "ipo_gmp_result.csv" ]; then
+
+            echo "ERROR: ipo_gmp_result.csv was not created."
+
+            exit 1
+
           fi
 
-          echo ""
+          if [ ! -f "ipo_gmp_history.csv" ]; then
 
-          echo "History CSV rows:"
+            echo "WARNING: ipo_gmp_history.csv was not created."
 
-          if [ -f ipo_gmp_history.csv ]; then
-            wc -l ipo_gmp_history.csv
+            echo "Creating empty history file."
+
+            echo "IPO Name,GMP Numeric,GMP %,Data Date,Data Time,Last Updated" \
+              > ipo_gmp_history.csv
+
           fi
 
 
-      # ======================================================
-      # 7. COMMIT AND PUSH
-      # ======================================================
+      # =====================================================
+      # 7. SYNC WITH REMOTE
+      # =====================================================
 
-      - name: Commit and push updated data
+      - name: Sync with latest main branch
 
         run: |
 
-          git config user.name "github-actions[bot]"
+          git config user.name \
+            "github-actions[bot]"
 
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
-
-          # Get the latest remote changes
           git fetch origin main
 
+          git checkout main
 
-          # Rebase our work on the latest main
-          git rebase origin/main
+          git pull --rebase origin main
 
 
-          # Add CSV files only
+      # =====================================================
+      # 8. COMMIT CSV FILES
+      # =====================================================
+
+      - name: Commit updated CSV files
+
+        run: |
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add ipo_gmp_result.csv
 
           git add ipo_gmp_history.csv
 
-
-          # Check whether anything changed
           if git diff --cached --quiet; then
 
             echo "No CSV changes."
@@ -164,7 +183,7 @@ jobs:
             git commit \
               -m "Update IPO GMP data"
 
-
-            git push origin HEAD:main
+            git push origin main
 
           fi
+```
