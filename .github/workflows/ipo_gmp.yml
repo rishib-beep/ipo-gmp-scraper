@@ -3,10 +3,17 @@ name: IPO GMP Scraper
 
 on:
 
-  # Manual run
+  # ============================================================
+  # MANUAL RUN
+  # ============================================================
+
   workflow_dispatch:
 
-  # Run every 30 minutes
+  # ============================================================
+  # AUTOMATIC RUN
+  # Every 30 minutes
+  # ============================================================
+
   schedule:
     - cron: "*/30 * * * *"
 
@@ -34,7 +41,7 @@ jobs:
 
 
       # ======================================================
-      # 1. CHECKOUT
+      # 1. CHECKOUT REPOSITORY
       # ======================================================
 
       - name: Checkout repository
@@ -47,7 +54,7 @@ jobs:
 
 
       # ======================================================
-      # 2. PYTHON
+      # 2. SETUP PYTHON
       # ======================================================
 
       - name: Setup Python
@@ -60,7 +67,7 @@ jobs:
 
 
       # ======================================================
-      # 3. INSTALL DEPENDENCIES
+      # 3. INSTALL PYTHON DEPENDENCIES
       # ======================================================
 
       - name: Install dependencies
@@ -75,7 +82,7 @@ jobs:
 
 
       # ======================================================
-      # 4. RUN SCRAPER
+      # 4. RUN IPO GMP SCRAPER
       # ======================================================
 
       - name: Run IPO GMP scraper
@@ -95,54 +102,26 @@ jobs:
           python ipo_gmp_scraper.py
 
           echo ""
-          echo "Scraper completed."
+          echo "Scraper completed successfully."
 
 
       # ======================================================
-      # 5. VERIFY CSV FILES
+      # 5. VERIFY RESULT CSV
       # ======================================================
 
-      - name: Verify generated CSV files
+      - name: Verify result CSV
 
         run: |
 
           echo "=========================================="
-          echo "REPOSITORY FILES"
+          echo "VERIFYING RESULT CSV"
           echo "=========================================="
 
-          ls -lah
 
+          if [ ! -f "ipo_gmp_result.csv" ]; then
 
-          echo ""
-          echo "=========================================="
-          echo "CSV FILES"
-          echo "=========================================="
-
-          ls -lah *.csv 2>/dev/null || true
-
-
-          echo ""
-          echo "=========================================="
-          echo "RESULT CSV"
-          echo "=========================================="
-
-          if [ -f "ipo_gmp_result.csv" ]; then
-
-            echo "ipo_gmp_result.csv EXISTS"
-
-            echo "File size:"
-            ls -lh ipo_gmp_result.csv
-
-            echo "Number of lines:"
-            wc -l ipo_gmp_result.csv
-
-            echo ""
-            echo "First 10 lines:"
-            head -10 ipo_gmp_result.csv
-
-          else
-
-            echo "ERROR: ipo_gmp_result.csv NOT FOUND"
+            echo "ERROR:"
+            echo "ipo_gmp_result.csv was not created."
 
             exit 1
 
@@ -150,35 +129,85 @@ jobs:
 
 
           echo ""
-          echo "=========================================="
-          echo "HISTORY CSV"
-          echo "=========================================="
+          echo "File exists:"
+          ls -lh ipo_gmp_result.csv
 
-          if [ -f "ipo_gmp_history.csv" ]; then
 
-            echo "ipo_gmp_history.csv EXISTS"
+          echo ""
+          echo "Line count:"
+          wc -l ipo_gmp_result.csv
 
-            echo "File size:"
-            ls -lh ipo_gmp_history.csv
 
-            echo "Number of lines:"
-            wc -l ipo_gmp_history.csv
-
-            echo ""
-            echo "First 10 lines:"
-            head -10 ipo_gmp_history.csv
-
-          else
-
-            echo "ERROR: ipo_gmp_history.csv NOT FOUND"
-
-            exit 1
-
-          fi
+          echo ""
+          echo "CSV content:"
+          head -10 ipo_gmp_result.csv
 
 
       # ======================================================
-      # 6. CHECK GIT STATUS
+      # 6. VERIFY HISTORY CSV
+      # ======================================================
+
+      - name: Verify history CSV
+
+        run: |
+
+          echo "=========================================="
+          echo "VERIFYING HISTORY CSV"
+          echo "=========================================="
+
+
+          if [ ! -f "ipo_gmp_history.csv" ]; then
+
+            echo "ERROR:"
+            echo "ipo_gmp_history.csv was not created."
+
+            exit 1
+
+          fi
+
+
+          echo ""
+          echo "File exists:"
+          ls -lh ipo_gmp_history.csv
+
+
+          echo ""
+          echo "Line count:"
+          wc -l ipo_gmp_history.csv
+
+
+          echo ""
+          echo "First 15 history records:"
+          head -15 ipo_gmp_history.csv
+
+
+      # ======================================================
+      # 7. DISPLAY CSV HEADERS
+      # ======================================================
+
+      - name: Verify CSV headers
+
+        run: |
+
+          echo "=========================================="
+          echo "CSV HEADERS"
+          echo "=========================================="
+
+
+          echo ""
+          echo "RESULT HEADER:"
+
+          head -1 ipo_gmp_result.csv
+
+
+          echo ""
+          echo "HISTORY HEADER:"
+
+          head -1 ipo_gmp_history.csv
+
+
+      # ======================================================
+      # 8. SHOW GIT STATUS
       # ======================================================
 
       - name: Check Git status
@@ -189,36 +218,57 @@ jobs:
           echo "GIT STATUS"
           echo "=========================================="
 
+
           git status --short
+
+
+          echo ""
+          echo "Current branch:"
+
+          git branch --show-current
+
 
           echo ""
           echo "Current commit:"
+
           git log -1 --oneline
 
 
       # ======================================================
-      # 7. COMMIT CSV FILES
+      # 9. CONFIGURE GIT
       # ======================================================
 
-      - name: Commit CSV files
+      - name: Configure Git
 
         run: |
-
-          echo "=========================================="
-          echo "COMMITTING CSV FILES"
-          echo "=========================================="
-
 
           git config user.name "github-actions[bot]"
 
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
 
-          # Add generated files
+      # ======================================================
+      # 10. STAGE CSV FILES
+      # ======================================================
+
+      - name: Stage CSV files
+
+        run: |
+
+          echo "=========================================="
+          echo "STAGING CSV FILES"
+          echo "=========================================="
+
 
           git add ipo_gmp_result.csv
 
           git add ipo_gmp_history.csv
+
+
+          echo ""
+          echo "Staged files:"
+
+          git diff --cached --name-only
 
 
           echo ""
@@ -227,37 +277,97 @@ jobs:
           git diff --cached --stat
 
 
-          # --------------------------------------------------
-          # Check whether anything changed
-          # --------------------------------------------------
+      # ======================================================
+      # 11. CHECK FOR CHANGES
+      # ======================================================
+
+      - name: Check for CSV changes
+
+        id: changes
+
+        run: |
 
           if git diff --cached --quiet; then
+
+            echo "changed=false" >> "$GITHUB_OUTPUT"
 
             echo ""
             echo "No CSV changes detected."
 
-            exit 0
+          else
+
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+
+            echo ""
+            echo "CSV changes detected."
 
           fi
 
 
-          # --------------------------------------------------
-          # Commit
-          # --------------------------------------------------
-
-          git commit -m "Update IPO GMP data"
-
-
       # ======================================================
-      # 8. PUSH
+      # 12. COMMIT CSV FILES
       # ======================================================
 
-      - name: Push changes
+      - name: Commit CSV files
+
+        if: steps.changes.outputs.changed == 'true'
 
         run: |
 
           echo "=========================================="
-          echo "PUSHING CSV FILES"
+          echo "COMMITTING CSV FILES"
+          echo "=========================================="
+
+
+          git commit -m "Update IPO GMP data"
+
+
+          echo ""
+          echo "Commit created:"
+
+          git log -1 --oneline
+
+
+      # ======================================================
+      # 13. SYNCHRONIZE WITH MAIN
+      # ======================================================
+
+      - name: Synchronize with main
+
+        if: steps.changes.outputs.changed == 'true'
+
+        run: |
+
+          echo "=========================================="
+          echo "SYNCHRONIZING WITH MAIN"
+          echo "=========================================="
+
+
+          git fetch origin main
+
+
+          # Rebase our generated-data commit on top
+          # of the latest main branch.
+
+          git rebase origin/main
+
+
+          echo ""
+          echo "Rebase completed."
+
+
+      # ======================================================
+      # 14. PUSH
+      # ======================================================
+
+      - name: Push changes
+
+        if: steps.changes.outputs.changed == 'true'
+
+        run: |
+
+          echo "=========================================="
+          echo "PUSHING TO MAIN"
           echo "=========================================="
 
 
@@ -269,7 +379,7 @@ jobs:
 
 
       # ======================================================
-      # 9. FINAL CHECK
+      # 15. FINAL VERIFICATION
       # ======================================================
 
       - name: Final verification
@@ -282,15 +392,21 @@ jobs:
 
 
           echo ""
-          echo "ipo_gmp_result.csv"
+          echo "RESULT CSV:"
 
           ls -lh ipo_gmp_result.csv
 
 
           echo ""
-          echo "ipo_gmp_history.csv"
+          echo "HISTORY CSV:"
 
           ls -lh ipo_gmp_history.csv
+
+
+          echo ""
+          echo "Git status:"
+
+          git status --short
 
 
           echo ""
@@ -300,5 +416,7 @@ jobs:
 
 
           echo ""
-          echo "IPO GMP scraper workflow completed successfully."
+          echo "=========================================="
+          echo "IPO GMP SCRAPER COMPLETED"
+          echo "=========================================="
 ```
