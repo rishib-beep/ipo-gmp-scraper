@@ -1,1112 +1,530 @@
-import os
-import re
-import asyncio
-from datetime import datetime
+```html
+<!DOCTYPE html>
 
-import pandas as pd
-from playwright.async_api import async_playwright
+<html lang="en">
 
+<head>
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+    <meta charset="UTF-8">
 
-URL = "https://www.investorgain.com/report/ipo-gmp-live/331/"
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-CURRENT_FILE = "ipo_gmp_result.csv"
-HISTORY_FILE = "ipo_gmp_history.csv"
+    <title>
+        IPO GMP Analysis Dashboard
+    </title>
 
-NOW = datetime.now()
 
-TODAY = NOW.strftime("%Y-%m-%d")
+    <!-- Chart.js -->
 
-UPDATED_TIME = NOW.strftime(
-    "%Y-%m-%d %H:%M:%S"
-)
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js">
+    </script>
 
 
-# ============================================================
-# HELPERS
-# ============================================================
+    <style>
 
-def clean_text(value):
+        * {
+            box-sizing: border-box;
+        }
 
-    if value is None:
-        return ""
+        body {
 
-    value = str(value)
+            margin: 0;
 
-    value = value.replace(
-        "\xa0",
-        " "
-    )
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
 
-    value = re.sub(
-        r"\s+",
-        " ",
-        value
-    )
+            background: #f5f7fa;
 
-    return value.strip()
+            color: #222;
+        }
 
 
-def number(value):
+        .container {
 
-    if value is None:
-        return None
+            width: 100%;
 
-    text = str(value)
+            max-width: 1500px;
 
-    text = text.replace(
-        ",",
-        ""
-    )
+            margin: auto;
 
-    match = re.search(
-        r"-?\d+(?:\.\d+)?",
-        text
-    )
+            padding: 15px;
+        }
 
-    if not match:
-        return None
 
-    try:
-        return float(
-            match.group()
-        )
+        h1 {
 
-    except Exception:
-        return None
+            margin: 5px 0;
 
+            font-size: 28px;
+        }
 
-def extract_gmp(value):
 
-    if not value:
-        return None
+        .subtitle {
 
-    text = str(value)
+            color: #666;
 
-    match = re.search(
-        r"₹?\s*(-?\d+(?:\.\d+)?)",
-        text
-    )
+            margin-bottom: 15px;
+        }
 
-    if match:
-        return float(
-            match.group(1)
-        )
 
-    return None
+        /* =====================================================
+           CONTROLS
+           ===================================================== */
 
+        .controls {
 
-def extract_gmp_percent(value):
+            display: flex;
 
-    if not value:
-        return None
+            flex-wrap: wrap;
 
-    match = re.search(
-        r"\((-?\d+(?:\.\d+)?)%\)",
-        str(value)
-    )
+            gap: 15px;
 
-    if match:
-        return float(
-            match.group(1)
-        )
+            margin-bottom: 15px;
+        }
 
-    return None
 
+        .control-group {
 
-def extract_down_up(value):
+            flex: 1;
 
-    if not value:
-        return None, None
+            min-width: 250px;
+        }
 
-    numbers = re.findall(
-        r"-?\d+(?:\.\d+)?",
-        str(value)
-    )
 
-    if len(numbers) >= 2:
+        label {
 
-        return (
-            float(numbers[-2]),
-            float(numbers[-1])
-        )
+            display: block;
 
-    return None, None
+            font-weight: bold;
 
+            margin-bottom: 6px;
+        }
 
-def clean_ipo_name(name):
 
-    name = clean_text(name)
+        select,
+        input {
 
-    if not name:
-        return ""
+            width: 100%;
 
-    name = re.sub(
-        r"(CALLOTTED|CLOSED|OPEN|IPO)$",
-        "",
-        name,
-        flags=re.IGNORECASE
-    )
+            padding: 10px;
 
-    return name.strip()
+            border: 1px solid #ccc;
 
+            border-radius: 6px;
 
-def find_column(
-    columns,
-    candidates
-):
+            background: white;
 
-    for column in columns:
+            font-size: 15px;
+        }
 
-        column_clean = clean_text(
-            column
-        ).upper()
 
-        for candidate in candidates:
+        /* =====================================================
+           CHART
+           ===================================================== */
 
-            if (
-                candidate.upper()
-                == column_clean
-            ):
+        .chart-card {
 
-                return column
+            background: white;
 
-    return None
+            border-radius: 10px;
 
+            padding: 15px;
 
-# ============================================================
-# SCRAPE INVESTORGAIN
-# ============================================================
+            margin-bottom: 15px;
 
-async def scrape_investorgain():
+            box-shadow:
+                0 2px 8px
+                rgba(0,0,0,0.08);
+        }
 
-    print("=" * 90)
 
-    print(
-        "OPENING INVESTORGAIN"
-    )
+        .chart-header {
 
-    print(
-        URL
-    )
+            display: flex;
 
-    print("=" * 90)
+            justify-content: space-between;
 
-    async with async_playwright() as p:
+            align-items: center;
 
-        browser = await p.chromium.launch(
-            headless=True
-        )
+            flex-wrap: wrap;
 
-        page = await browser.new_page(
-            viewport={
-                "width": 1440,
-                "height": 1200
-            },
-            user_agent=(
-                "Mozilla/5.0 "
-                "(X11; Linux x86_64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/131 Safari/537.36"
-            )
-        )
+            margin-bottom: 5px;
+        }
 
-        try:
 
-            await page.goto(
-                URL,
-                wait_until="domcontentloaded",
-                timeout=120000
-            )
+        .chart-header h2 {
 
-            await page.wait_for_timeout(
-                7000
-            )
+            margin: 0;
+        }
 
-            print(
-                "Page:",
-                page.url
-            )
 
-            print(
-                "Title:",
-                await page.title()
-            )
+        .chart-container {
 
-            tables = await page.locator(
-                "table"
-            ).all()
+            position: relative;
 
-            print(
-                "Tables found:",
-                len(tables)
-            )
+            width: 100%;
 
-            final_rows = []
+            height: 280px;
+        }
 
-            for table_number, table in enumerate(
-                tables,
-                start=1
-            ):
 
-                rows = await table.locator(
-                    "tr"
-                ).all()
+        /* =====================================================
+           STATUS
+           ===================================================== */
 
-                if len(rows) < 2:
-                    continue
+        .status {
 
-                table_data = []
+            padding: 10px;
 
-                for row in rows:
+            margin-bottom: 15px;
 
-                    cells = await row.locator(
-                        "th, td"
-                    ).all()
+            background: white;
 
-                    values = []
+            border-radius: 6px;
 
-                    for cell in cells:
+            color: #555;
+        }
 
-                        try:
 
-                            text = await cell.inner_text()
+        /* =====================================================
+           TABLE
+           ===================================================== */
 
-                        except Exception:
+        .table-card {
 
-                            text = ""
+            background: white;
 
-                        values.append(
-                            clean_text(
-                                text
-                            )
-                        )
+            border-radius: 10px;
 
-                    if values:
+            padding: 10px;
 
-                        table_data.append(
-                            values
-                        )
+            box-shadow:
+                0 2px 8px
+                rgba(0,0,0,0.08);
+        }
 
-                if len(table_data) < 2:
-                    continue
 
-                header = table_data[0]
+        .table-title {
 
-                header_text = " ".join(
-                    header
-                ).upper()
+            padding: 5px 10px;
 
-                print()
-                print(
-                    f"TABLE {table_number}"
-                )
+            margin: 0;
+        }
 
-                print(
-                    header
-                )
 
-                # ------------------------------------------------
-                # Correct GMP table
-                # ------------------------------------------------
+        .table-wrapper {
 
-                if "GMP" not in header_text:
+            width: 100%;
 
-                    continue
+            overflow-x: auto;
+        }
 
-                if "PRICE" not in header_text:
 
-                    continue
+        table {
 
-                if (
-                    "IPO" not in header_text
-                    and "NAME" not in header_text
-                ):
+            width: 100%;
 
-                    continue
+            border-collapse: collapse;
 
-                print(
-                    "✓ CORRECT GMP TABLE FOUND"
-                )
+            min-width: 1300px;
+        }
 
-                for row in table_data[1:]:
 
-                    row = row[:len(header)]
+        th {
 
-                    while len(row) < len(header):
+            background: #1f2937;
 
-                        row.append("")
+            color: white;
 
-                    record = dict(
-                        zip(
-                            header,
-                            row
-                        )
-                    )
+            padding: 10px;
 
-                    final_rows.append(
-                        record
-                    )
+            text-align: left;
 
-            await browser.close()
+            white-space: nowrap;
+        }
 
-            print(
-                "Scraped records:",
-                len(final_rows)
-            )
 
-            return final_rows
+        td {
 
-        except Exception:
+            padding: 9px;
 
-            await browser.close()
+            border-bottom:
+                1px solid #e5e7eb;
 
-            raise
+            white-space: nowrap;
+        }
 
 
-# ============================================================
-# CREATE CURRENT DATAFRAME
-# ============================================================
+        tbody tr:hover {
 
-def create_dataframe(rows):
+            background: #f3f4f6;
+        }
 
-    if not rows:
 
-        return pd.DataFrame()
+        /* =====================================================
+           MOBILE
+           ===================================================== */
 
-    columns = list(
-        rows[0].keys()
-    )
+        @media (
+            max-width: 768px
+        ) {
 
-    name_col = find_column(
-        columns,
-        [
-            "IPO Name",
-            "Name"
-        ]
-    )
+            .container {
 
-    gmp_col = find_column(
-        columns,
-        [
-            "GMP"
-        ]
-    )
+                padding: 10px;
+            }
 
-    price_col = find_column(
-        columns,
-        [
-            "IPO Price",
-            "Price",
-            "Price (₹)"
-        ]
-    )
 
-    subscription_col = find_column(
-        columns,
-        [
-            "Subscription",
-            "Sub"
-        ]
-    )
+            h1 {
 
-    ipo_size_col = find_column(
-        columns,
-        [
-            "IPO Size"
-        ]
-    )
+                font-size: 22px;
+            }
 
-    lot_col = find_column(
-        columns,
-        [
-            "Lot Size",
-            "Lot"
-        ]
-    )
 
-    open_col = find_column(
-        columns,
-        [
-            "Open"
-        ]
-    )
+            .control-group {
 
-    close_col = find_column(
-        columns,
-        [
-            "Close"
-        ]
-    )
+                min-width: 100%;
+            }
 
-    boa_col = find_column(
-        columns,
-        [
-            "BOA Date",
-            "BOA Dt"
-        ]
-    )
 
-    listing_col = find_column(
-        columns,
-        [
-            "Listing Date",
-            "Listing"
-        ]
-    )
+            .chart-container {
 
-    updated_col = find_column(
-        columns,
-        [
-            "Updated",
-            "Updated-On"
-        ]
-    )
+                height: 230px;
+            }
 
-    anchor_col = find_column(
-        columns,
-        [
-            "Anchor"
-        ]
-    )
 
-    rating_col = find_column(
-        columns,
-        [
-            "Rating"
-        ]
-    )
+            .chart-header h2 {
 
-    records = []
+                font-size: 18px;
+            }
 
-    for row in rows:
+        }
 
-        name = clean_ipo_name(
-            row.get(
-                name_col,
-                ""
-            )
-            if name_col
-            else ""
-        )
 
-        if not name:
+        @media (
+            max-width: 480px
+        ) {
 
-            continue
+            .chart-container {
 
-        raw_gmp = (
-            row.get(
-                gmp_col,
-                ""
-            )
-            if gmp_col
-            else ""
-        )
+                height: 210px;
+            }
 
-        gmp = extract_gmp(
-            raw_gmp
-        )
+        }
 
-        website_percent = (
-            extract_gmp_percent(
-                raw_gmp
-            )
-        )
+    </style>
 
-        gmp_down, gmp_up = (
-            extract_down_up(
-                raw_gmp
-            )
-        )
+</head>
 
-        ipo_price = number(
-            row.get(
-                price_col,
-                ""
-            )
-            if price_col
-            else ""
-        )
-
-        if ipo_price is None:
-
-            ipo_price = 0
-
-        if gmp is None:
-
-            gmp = 0
-
-        calculated_percent = 0
-
-        if ipo_price > 0:
-
-            calculated_percent = (
-                gmp /
-                ipo_price *
-                100
-            )
-
-        gmp_percent = (
-            website_percent
-            if website_percent is not None
-            else calculated_percent
-        )
-
-        estimated_listing = (
-            ipo_price +
-            gmp
-        )
-
-        records.append({
-
-            "IPO Name":
-                name,
-
-            "GMP":
-                round(
-                    gmp,
-                    2
-                ),
-
-            "GMP %":
-                round(
-                    gmp_percent,
-                    2
-                ),
-
-            "GMP Down":
-                (
-                    gmp_down
-                    if gmp_down is not None
-                    else 0
-                ),
-
-            "GMP Up":
-                (
-                    gmp_up
-                    if gmp_up is not None
-                    else 0
-                ),
-
-            "Subscription":
-                (
-                    row.get(
-                        subscription_col,
-                        ""
-                    )
-                    if subscription_col
-                    else ""
-                ),
-
-            "IPO Price":
-                ipo_price,
-
-            "IPO Size":
-                (
-                    row.get(
-                        ipo_size_col,
-                        ""
-                    )
-                    if ipo_size_col
-                    else ""
-                ),
-
-            "Lot Size":
-                (
-                    number(
-                        row.get(
-                            lot_col,
-                            ""
-                        )
-                    )
-                    if lot_col
-                    else ""
-                ),
-
-            "Open":
-                (
-                    row.get(
-                        open_col,
-                        ""
-                    )
-                    if open_col
-                    else ""
-                ),
-
-            "Close":
-                (
-                    row.get(
-                        close_col,
-                        ""
-                    )
-                    if close_col
-                    else ""
-                ),
-
-            "BOA Date":
-                (
-                    row.get(
-                        boa_col,
-                        ""
-                    )
-                    if boa_col
-                    else ""
-                ),
-
-            "Listing Date":
-                (
-                    row.get(
-                        listing_col,
-                        ""
-                    )
-                    if listing_col
-                    else ""
-                ),
-
-            "Updated":
-                (
-                    row.get(
-                        updated_col,
-                        UPDATED_TIME
-                    )
-                    if updated_col
-                    else UPDATED_TIME
-                ),
-
-            "Anchor":
-                (
-                    row.get(
-                        anchor_col,
-                        ""
-                    )
-                    if anchor_col
-                    else ""
-                ),
-
-            "Estimated Listing Price":
-                round(
-                    estimated_listing,
-                    2
-                ),
-
-            "Calculated GMP %":
-                round(
-                    calculated_percent,
-                    2
-                ),
-
-            "Rating":
-                (
-                    row.get(
-                        rating_col,
-                        ""
-                    )
-                    if rating_col
-                    else ""
-                )
 
-        })
+<body>
 
-    return pd.DataFrame(
-        records
-    )
 
+<div class="container">
 
-# ============================================================
-# DATE PARSER
-# ============================================================
 
-def parse_listing_date(value):
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
 
-    if not value:
+    <h1>
+        📊 IPO GMP Analysis Dashboard
+    </h1>
 
-        return pd.Timestamp.min
 
-    text = clean_text(
-        value
-    )
+    <div class="subtitle">
 
-    # Remove GMP text
-    text = re.sub(
-        r"\s*GMP\s*:.*",
-        "",
-        text,
-        flags=re.IGNORECASE
-    ).strip()
+        Live IPO Grey Market Premium & GMP Trend
 
-    patterns = [
-
-        r"(\d{1,2})[-/](\d{1,2})[-/](\d{4})",
-
-        r"(\d{1,2})[-/]([A-Za-z]{3,9})[-/](\d{4})",
-
-        r"(\d{1,2})[-/]([A-Za-z]{3,9})",
-
-        r"(\d{1,2})[-/](\d{1,2})"
-
-    ]
-
-    for pattern in patterns:
-
-        match = re.search(
-            pattern,
-            text
-        )
-
-        if not match:
-
-            continue
-
-        try:
+    </div>
 
-            groups = match.groups()
 
-            day = int(
-                groups[0]
-            )
+    <!-- =====================================================
+         CONTROLS
+         ===================================================== -->
 
-            second = groups[1]
+    <div class="controls">
 
-            if second.isdigit():
 
-                month = int(
-                    second
-                )
+        <div class="control-group">
 
-            else:
+            <label for="ipoSelect">
+                GMP Trend
+            </label>
 
-                month = pd.to_datetime(
-                    second[:3],
-                    format="%b"
-                ).month
 
-            if len(groups) >= 3 and groups[2]:
+            <select id="ipoSelect">
 
-                year = int(
-                    groups[2]
-                )
+                <option value="">
+                    Select IPO
+                </option>
 
-            else:
+            </select>
 
-                year = NOW.year
+        </div>
 
-            return pd.Timestamp(
-                year=year,
-                month=month,
-                day=day
-            )
 
-        except Exception:
+        <div class="control-group">
 
-            continue
+            <label for="searchBox">
+                Search IPO
+            </label>
 
-    return pd.Timestamp.min
 
+            <input
+                type="text"
+                id="searchBox"
+                placeholder="Search IPO..."
+            >
 
-# ============================================================
-# SAVE CURRENT CSV
-# ============================================================
+        </div>
 
-def save_current(df):
 
-    if df.empty:
+    </div>
 
-        return
 
-    df = df.copy()
+    <!-- =====================================================
+         CHART
+         ===================================================== -->
 
-    df["_sort_date"] = (
-        df["Listing Date"]
-        .apply(
-            parse_listing_date
-        )
-    )
+    <div class="chart-card">
 
-    df = df.sort_values(
-        [
-            "_sort_date",
-            "IPO Name"
-        ],
-        ascending=[
-            False,
-            True
-        ]
-    )
 
-    df = df.drop(
-        columns=[
-            "_sort_date"
-        ]
-    )
+        <div class="chart-header">
 
-    df.to_csv(
-        CURRENT_FILE,
-        index=False,
-        encoding="utf-8-sig"
-    )
+            <div>
 
-    print(
-        "✓ Current CSV saved:",
-        CURRENT_FILE
-    )
+                <h2 id="chartTitle">
+                    GMP % Trend
+                </h2>
 
+                <small>
+                    X-axis: Date |
+                    Y-axis: GMP %
+                </small>
 
-# ============================================================
-# UPDATE HISTORY
-# ============================================================
+            </div>
 
-def update_history(df):
+        </div>
 
-    if df.empty:
 
-        return
+        <div class="chart-container">
 
-    # --------------------------------------------------------
-    # Existing history
-    # --------------------------------------------------------
+            <canvas
+                id="gmpChart">
+            </canvas>
 
-    if os.path.exists(
-        HISTORY_FILE
-    ):
+        </div>
 
-        try:
 
-            history = pd.read_csv(
-                HISTORY_FILE
-            )
+    </div>
 
-        except Exception:
 
-            history = pd.DataFrame()
+    <!-- =====================================================
+         STATUS
+         ===================================================== -->
 
-    else:
+    <div
+        class="status"
+        id="status">
 
-        history = pd.DataFrame()
+        Loading GMP data...
 
-    # --------------------------------------------------------
-    # Current observation
-    # --------------------------------------------------------
+    </div>
 
-    new_rows = []
 
-    for _, row in df.iterrows():
+    <!-- =====================================================
+         CURRENT IPO TABLE
+         ===================================================== -->
 
-        new_rows.append({
+    <div class="table-card">
 
-            "IPO Name":
-                str(
-                    row["IPO Name"]
-                ).strip(),
 
-            "Date":
-                TODAY,
+        <h2 class="table-title">
 
-            "GMP":
-                float(
-                    row["GMP"]
-                ),
+            Current IPO GMP
 
-            "GMP %":
-                float(
-                    row["GMP %"]
-                ),
+        </h2>
 
-            "IPO Price":
-                float(
-                    row["IPO Price"]
-                ),
-
-            "Updated":
-                UPDATED_TIME
 
-        })
-
-    new_df = pd.DataFrame(
-        new_rows
-    )
-
-    # --------------------------------------------------------
-    # Combine
-    # --------------------------------------------------------
-
-    if history.empty:
-
-        history = new_df
-
-    else:
+        <div class="table-wrapper">
 
-        history = pd.concat(
-            [
-                history,
-                new_df
-            ],
-            ignore_index=True
-        )
 
-    # --------------------------------------------------------
-    # Clean
-    # --------------------------------------------------------
+            <table>
 
-    history["IPO Name"] = (
-        history["IPO Name"]
-        .astype(str)
-        .str.strip()
-    )
 
-    history["Date"] = (
-        history["Date"]
-        .astype(str)
-        .str.strip()
-    )
+                <thead>
 
-    history["GMP"] = pd.to_numeric(
-        history["GMP"],
-        errors="coerce"
-    ).fillna(0)
+                    <tr>
 
-    history["GMP %"] = pd.to_numeric(
-        history["GMP %"],
-        errors="coerce"
-    ).fillna(0)
+                        <th>IPO Name</th>
 
-    history["IPO Price"] = pd.to_numeric(
-        history["IPO Price"],
-        errors="coerce"
-    ).fillna(0)
+                        <th>GMP</th>
 
-    # --------------------------------------------------------
-    # ONE ROW PER IPO PER DAY
-    # --------------------------------------------------------
+                        <th>GMP %</th>
 
-    history = history.drop_duplicates(
-        subset=[
-            "IPO Name",
-            "Date"
-        ],
-        keep="last"
-    )
+                        <th>GMP Down</th>
 
-    # --------------------------------------------------------
-    # Sort
-    # --------------------------------------------------------
+                        <th>GMP Up</th>
 
-    history["_date"] = pd.to_datetime(
-        history["Date"],
-        errors="coerce"
-    )
+                        <th>Subscription</th>
 
-    history = history.sort_values(
-        [
-            "IPO Name",
-            "_date"
-        ],
-        ascending=[
-            True,
-            True
-        ]
-    )
+                        <th>IPO Price</th>
 
-    history = history.drop(
-        columns=[
-            "_date"
-        ]
-    )
+                        <th>IPO Size</th>
 
-    # --------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------
+                        <th>Lot Size</th>
 
-    history.to_csv(
-        HISTORY_FILE,
-        index=False,
-        encoding="utf-8-sig"
-    )
+                        <th>Open</th>
 
-    print(
-        "✓ History CSV saved:",
-        HISTORY_FILE
-    )
+                        <th>Close</th>
 
-    print(
-        "History rows:",
-        len(history)
-    )
+                        <th>BOA Date</th>
 
+                        <th>Listing Date</th>
 
-# ============================================================
-# MAIN
-# ============================================================
+                        <th>Updated</th>
 
-async def main():
+                        <th>Anchor</th>
 
-    print()
-    print("=" * 90)
-    print("IPO GMP SCRAPER")
-    print("=" * 90)
+                        <th>Estimated Listing</th>
 
-    print(
-        "Run time:",
-        UPDATED_TIME
-    )
+                    </tr>
 
-    rows = await scrape_investorgain()
+                </thead>
 
-    if not rows:
 
-        print(
-            "❌ No GMP data found."
-        )
+                <tbody
+                    id="ipoTableBody">
+                </tbody>
 
-        return
 
-    print(
-        "Scraped rows:",
-        len(rows)
-    )
+            </table>
 
-    df = create_dataframe(
-        rows
-    )
 
-    if df.empty:
+        </div>
 
-        print(
-            "❌ DataFrame is empty."
-        )
 
-        return
+    </div>
 
-    print(
-        "IPO records:",
-        len(df)
-    )
 
-    # Current CSV
-    save_current(
-        df
-    )
+</div>
 
-    # Historical CSV
-    update_history(
-        df
-    )
 
-    print()
-    print("=" * 90)
-    print("COMPLETED")
-    print("=" * 90)
+<!-- =========================================================
+     JAVASCRIPT
+     ========================================================= -->
 
+<script src="script.js"></script>
 
-# ============================================================
-# START
-# ============================================================
 
-if __name__ == "__main__":
+</body>
 
-    asyncio.run(
-        main()
-    )
+</html>
+```
