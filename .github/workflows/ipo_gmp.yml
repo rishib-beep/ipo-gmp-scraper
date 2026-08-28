@@ -1,4 +1,4 @@
-```yaml
+
 name: IPO GMP Scraper
 
 on:
@@ -128,4 +128,4 @@ jobs:
 
           echo ""
           echo "IPO GMP scraper completed successfully."
-```
+
