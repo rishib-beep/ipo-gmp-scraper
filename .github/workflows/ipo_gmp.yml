@@ -9,10 +9,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: ipo-gmp-scraper
-  cancel-in-progress: true
-
 jobs:
   scrape:
 
@@ -20,9 +16,9 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # 1. CHECKOUT REPOSITORY
-      # ============================================================
+      # =====================================================
+      # 1. Checkout repository
+      # =====================================================
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -30,10 +26,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-
-      # ============================================================
-      # 2. SETUP PYTHON
-      # ============================================================
+      # =====================================================
+      # 2. Setup Python
+      # =====================================================
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -41,246 +36,115 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-
-      # ============================================================
-      # 3. INSTALL PYTHON DEPENDENCIES
-      # ============================================================
+      # =====================================================
+      # 3. Install dependencies
+      # =====================================================
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install pandas
-            pip install playwright
-            pip install gspread
-            pip install google-auth
-            pip install google-auth-oauthlib
-            pip install google-auth-httplib2
-          fi
-
-
-      # ============================================================
-      # 4. INSTALL PLAYWRIGHT CHROMIUM
-      # ============================================================
-
-      - name: Install Playwright Chromium
-        run: |
+          pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
+      # =====================================================
+      # 4. Run scraper
+      # =====================================================
 
-      # ============================================================
-      # 5. SHOW REPOSITORY FILES
-      # ============================================================
-
-      - name: Check repository
+      - name: Run IPO GMP scraper
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: |
-          echo "Current directory:"
-          pwd
+          echo "Starting IPO GMP scraper..."
+          python ipo_gmp_scraper.py
+          echo "Scraper completed."
 
-          echo ""
+      # =====================================================
+      # 5. Show generated files
+      # =====================================================
+
+      - name: Check generated files
+        run: |
           echo "Repository files:"
           ls -lah
 
           echo ""
-          echo "Python files:"
-          find . -maxdepth 2 -type f -name "*.py" -print
-
-          echo ""
           echo "CSV files:"
-          find . -maxdepth 2 -type f -name "*.csv" -print
-
-
-      # ============================================================
-      # 6. CHECK SCRAPER FILE
-      # ============================================================
-
-      - name: Check scraper
-        run: |
-          if [ ! -f "ipo_gmp_scraper.py" ]; then
-            echo "ERROR: ipo_gmp_scraper.py not found."
-            echo ""
-            echo "The scraper must be located at:"
-            echo "ipo-gmp-scraper/ipo_gmp_scraper.py"
-            exit 1
-          fi
-
-          echo "ipo_gmp_scraper.py found."
-
-
-      # ============================================================
-      # 7. RUN IPO GMP SCRAPER
-      # ============================================================
-
-      - name: Run IPO GMP scraper
-        run: |
-          echo "Starting IPO GMP scraper..."
-          python ipo_gmp_scraper.py
-
-
-      # ============================================================
-      # 8. CHECK SCRAPER OUTPUT
-      # ============================================================
-
-      - name: Check scraper output
-        run: |
-
-          echo "Files after scraper:"
-          ls -lah
+          ls -lah *.csv 2>/dev/null || true
 
           echo ""
-          echo "CSV files:"
-          find . -maxdepth 2 -type f -name "*.csv" -print
-
-          if [ ! -f "ipo_gmp_result.csv" ]; then
-            echo "ERROR: ipo_gmp_result.csv was not created."
-            exit 1
-          fi
-
-          echo ""
-          echo "ipo_gmp_result.csv found."
-
-          echo ""
-          echo "First 10 rows:"
-          head -n 10 ipo_gmp_result.csv
-
-
-      # ============================================================
-      # 9. CREATE HISTORY FILE IF IT DOES NOT EXIST
-      # ============================================================
-
-      - name: Initialize history file
-        run: |
-
-          if [ ! -f "ipo_gmp_history.csv" ]; then
-
-            echo "ipo_gmp_history.csv does not exist."
-
-            echo "Creating history file..."
-
-            echo "IPO Name,GMP Numeric,GMP %,Data Date,Data Time,Last Updated" > ipo_gmp_history.csv
-
-          else
-
-            echo "ipo_gmp_history.csv already exists."
-
-          fi
-
-
-      # ============================================================
-      # 10. CHECK HISTORY FILE
-      # ============================================================
-
-      - name: Check history file
-        run: |
-
-          if [ ! -f "ipo_gmp_history.csv" ]; then
-            echo "ERROR: ipo_gmp_history.csv still does not exist."
-            exit 1
-          fi
-
           echo "History file:"
-          ls -lh ipo_gmp_history.csv
+          if [ -f ipo_gmp_history.csv ]; then
+            echo "ipo_gmp_history.csv EXISTS"
+            wc -l ipo_gmp_history.csv
+            head -5 ipo_gmp_history.csv
+          else
+            echo "ipo_gmp_history.csv NOT FOUND"
+          fi
 
           echo ""
-          echo "History rows:"
-          wc -l ipo_gmp_history.csv
+          echo "Result file:"
+          if [ -f ipo_gmp_result.csv ]; then
+            echo "ipo_gmp_result.csv EXISTS"
+            wc -l ipo_gmp_result.csv
+            head -5 ipo_gmp_result.csv
+          else
+            echo "ipo_gmp_result.csv NOT FOUND"
+          fi
 
+      # =====================================================
+      # 6. Commit generated CSV files
+      # =====================================================
 
-      # ============================================================
-      # 11. CONFIGURE GIT
-      # ============================================================
-
-      - name: Configure Git
+      - name: Commit CSV files
         run: |
 
           git config user.name "github-actions[bot]"
-
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-
-      # ============================================================
-      # 12. SYNCHRONIZE WITH MAIN
-      # ============================================================
-
-      - name: Synchronize repository
-        run: |
-
-          git fetch origin main
-
-          git rebase origin/main
-
-
-      # ============================================================
-      # 13. ADD UPDATED FILES
-      # ============================================================
-
-      - name: Add updated files
-        run: |
-
-          git add ipo_gmp_result.csv
-
-          git add ipo_gmp_history.csv
-
-          echo "Files staged:"
+          echo "Checking Git status..."
 
           git status --short
 
+          # Add only generated data files
+          git add ipo_gmp_result.csv
+          git add ipo_gmp_history.csv
 
-      # ============================================================
-      # 14. COMMIT CHANGES
-      # ============================================================
+          echo "Staged changes:"
+          git diff --cached --stat
 
-      - name: Commit changes
-        run: |
+          # -------------------------------------------------
+          # Nothing changed
+          # -------------------------------------------------
 
           if git diff --cached --quiet; then
 
-            echo "No IPO GMP changes detected."
-
-          else
-
-            echo "Changes detected."
-
-            git commit -m "Update IPO GMP data"
+            echo "No CSV changes detected."
+            exit 0
 
           fi
 
+          # -------------------------------------------------
+          # Commit changes
+          # -------------------------------------------------
 
-      # ============================================================
-      # 15. PUSH TO GITHUB
-      # ============================================================
+          git commit -m "Update IPO GMP data"
+
+      # =====================================================
+      # 7. Push safely
+      # =====================================================
 
       - name: Push changes
         run: |
 
+          echo "Fetching latest main branch..."
+
+          git fetch origin main
+
+          echo "Synchronizing local branch..."
+
+          git merge --no-edit origin/main || true
+
+          echo "Pushing generated data..."
+
           git push origin HEAD:main
-
-          echo "IPO GMP data successfully pushed to GitHub."
-
-
-      # ============================================================
-      # 16. FINAL STATUS
-      # ============================================================
-
-      - name: Final status
-        run: |
-
-          echo ""
-          echo "============================================"
-          echo "IPO GMP SCRAPER COMPLETED"
-          echo "============================================"
-
-          echo ""
-          echo "Result CSV:"
-          ls -lh ipo_gmp_result.csv
-
-          echo ""
-          echo "History CSV:"
-          ls -lh ipo_gmp_history.csv
-
-          echo ""
-          echo "Repository:"
-          git status --short
