@@ -1,5 +1,15 @@
-import asyncio
+# ============================================================
+# IPO GMP SCRAPER
+# InvestorGain -> CSV + Google Sheets
+# Sorted by LATEST UPDATED DATE/TIME first
+# ============================================================
+
+import os
 import re
+import json
+import asyncio
+from datetime import datetime
+
 import pandas as pd
 from playwright.async_api import async_playwright
 
@@ -8,41 +18,19 @@ from playwright.async_api import async_playwright
 # CONFIGURATION
 # ============================================================
 
-URL = "https://www.investorgain.com/report/live-ipo-gmp/331/"
+URL = "https://www.investorgain.com/report/ipo-gmp-live/331/"
 
-OUTPUT_FILE = "ipo_gmp_result.csv"
+CSV_FILE = "ipo_gmp_result.csv"
 
-HEADLESS = True
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
-WAIT_TIME = 8000
+SHEET_NAME = "IPO GMP"
 
 
 # ============================================================
-# HELPER FUNCTIONS
+# CLEAN NUMBER
 # ============================================================
-
-def clean_text(value):
-    """Clean whitespace and invisible characters."""
-
-    if value is None:
-        return ""
-
-    value = str(value)
-
-    value = value.replace("\xa0", " ")
-
-    value = re.sub(
-        r"\s+",
-        " ",
-        value
-    )
-
-    return value.strip()
-
-
-# ------------------------------------------------------------
-# Extract first number
-# ------------------------------------------------------------
 
 def extract_number(value):
 
@@ -51,7 +39,12 @@ def extract_number(value):
 
     value = str(value)
 
-    value = value.replace(",", "")
+    value = (
+        value.replace(",", "")
+             .replace("₹", "")
+             .replace("%", "")
+             .strip()
+    )
 
     match = re.search(
         r"-?\d+(?:\.\d+)?",
@@ -59,243 +52,163 @@ def extract_number(value):
     )
 
     if match:
-
         try:
             return float(match.group())
-
         except:
             return None
 
     return None
 
 
-# ------------------------------------------------------------
-# Extract GMP information
-# ------------------------------------------------------------
+# ============================================================
+# CLEAN GMP
+# ============================================================
 
-def extract_gmp(value):
+def parse_gmp(value):
 
-    value = clean_text(value)
+    if value is None:
+        return None
+
+    text = str(value).strip()
 
     # Example:
-    #
     # ₹330 (110.00%)
     # 65 ↓ / 330 ↑
-    #
-    # GMP = 330
-    # GMP % = 110.00
-    # Down = 65
-    # Up = 330
 
-    gmp = None
-    gmp_percent = None
-    gmp_down = None
-    gmp_up = None
-
-    # GMP main value
     match = re.search(
-        r"₹\s*([\d,.]+)",
-        value
+        r"₹\s*([0-9]+(?:\.[0-9]+)?)",
+        text
     )
 
     if match:
+        return float(match.group(1))
 
-        try:
-            gmp = float(
-                match.group(1).replace(",", "")
-            )
-        except:
-            pass
-
-    # GMP percentage
-    match = re.search(
-        r"\(([-+]?\d+(?:\.\d+)?)%\)",
-        value
-    )
-
-    if match:
-
-        try:
-            gmp_percent = float(
-                match.group(1)
-            )
-        except:
-            pass
-
-    # Down / Up
-    match = re.search(
-        r"([\d,.]+)\s*↓\s*/\s*([\d,.]+)\s*↑",
-        value
-    )
-
-    if match:
-
-        try:
-            gmp_down = float(
-                match.group(1).replace(",", "")
-            )
-        except:
-            pass
-
-        try:
-            gmp_up = float(
-                match.group(2).replace(",", "")
-            )
-        except:
-            pass
-
-    return (
-        gmp,
-        gmp_percent,
-        gmp_down,
-        gmp_up
-    )
+    # fallback
+    return extract_number(text)
 
 
-# ------------------------------------------------------------
-# Extract subscription
-# ------------------------------------------------------------
+# ============================================================
+# PARSE GMP %
+# ============================================================
 
-def extract_subscription(value):
+def parse_gmp_percent(value):
 
-    value = clean_text(value)
-
-    if value in ["-", "--", ""]:
+    if value is None:
         return None
 
+    text = str(value)
+
     match = re.search(
-        r"([\d,.]+)\s*x",
-        value,
-        re.IGNORECASE
+        r"\(\s*(-?\d+(?:\.\d+)?)\s*%\s*\)",
+        text
     )
 
     if match:
-
-        try:
-
-            return float(
-                match.group(1).replace(",", "")
-            )
-
-        except:
-            return None
+        return float(match.group(1))
 
     return None
 
 
-# ------------------------------------------------------------
-# Extract price
-# ------------------------------------------------------------
+# ============================================================
+# PARSE GMP DOWN / UP
+# ============================================================
 
-def extract_price(value):
+def parse_gmp_down(value):
 
-    value = clean_text(value)
-
-    if value in ["-", "--", ""]:
+    if value is None:
         return None
 
-    return extract_number(value)
+    text = str(value)
 
-
-# ------------------------------------------------------------
-# Clean IPO name
-# ------------------------------------------------------------
-
-def clean_ipo_name(value):
-
-    value = clean_text(value)
-
-    # Remove trailing status characters
-    value = re.sub(
-        r"(?:IPO)?\s*CALLOTTED$",
-        "",
-        value,
-        flags=re.IGNORECASE
+    match = re.search(
+        r"([0-9]+(?:\.[0-9]+)?)\s*↓",
+        text
     )
 
-    # Remove trailing U/O markers
-    value = re.sub(
-        r"\s+[UO]$",
-        "",
-        value
+    if match:
+        return float(match.group(1))
+
+    return 0.0
+
+
+def parse_gmp_up(value):
+
+    if value is None:
+        return None
+
+    text = str(value)
+
+    match = re.search(
+        r"([0-9]+(?:\.[0-9]+)?)\s*↑",
+        text
     )
 
-    return value.strip()
+    if match:
+        return float(match.group(1))
+
+    return 0.0
 
 
-# ------------------------------------------------------------
-# Extract date
-# ------------------------------------------------------------
+# ============================================================
+# PARSE UPDATED DATE
+# ============================================================
 
-def extract_date(value):
-
-    value = clean_text(value)
-
-    if not value:
-        return ""
-
-    # Keep only the date portion before GMP
-    value = value.split("GMP")[0]
-
-    return value.strip()
-
-
-# ------------------------------------------------------------
-# Convert date to sortable date
-# ------------------------------------------------------------
-
-def date_for_sort(value):
+def parse_updated(value):
 
     if value is None:
         return pd.NaT
 
-    value = str(value).strip()
+    text = str(value).strip()
 
-    if not value:
-        return pd.NaT
-
-    # Remove GMP text
-    value = value.split("GMP")[0].strip()
-
-    # Remove possible year if present
-    value = re.sub(
-        r"\b\d{4}\b",
-        "",
-        value
-    ).strip()
+    # InvestorGain format:
+    # 27-Aug 23:37
+    #
+    # Add current year.
+    #
+    # Example:
+    # 27-Aug 23:37
+    # -> 2026-08-27 23:37
 
     try:
 
-        # Current year
-        current_year = pd.Timestamp.now().year
+        current_year = datetime.now().year
 
+        dt = datetime.strptime(
+            f"{text} {current_year}",
+            "%d-%b %H:%M %Y"
+        )
+
+        return pd.Timestamp(dt)
+
+    except:
+
+        pass
+
+    # fallback
+    try:
         return pd.to_datetime(
-            f"{value}-{current_year}",
-            format="%d-%b-%Y",
+            value,
             errors="coerce"
         )
 
     except:
-
         return pd.NaT
 
 
 # ============================================================
-# SCRAPER
+# SCRAPE DATA
 # ============================================================
 
 async def scrape_ipo_gmp():
 
-    print("=" * 100)
-    print("IPO GMP SCRAPER")
-    print("=" * 100)
-
-    print("\nOpening InvestorGain...")
+    print("=" * 80)
+    print("OPENING INVESTORGAIN")
+    print("=" * 80)
 
     async with async_playwright() as p:
 
         browser = await p.chromium.launch(
-            headless=HEADLESS
+            headless=True
         )
 
         page = await browser.new_page(
@@ -305,10 +218,6 @@ async def scrape_ipo_gmp():
             }
         )
 
-        # ----------------------------------------------------
-        # Open page
-        # ----------------------------------------------------
-
         try:
 
             await page.goto(
@@ -317,196 +226,120 @@ async def scrape_ipo_gmp():
                 timeout=60000
             )
 
-        except Exception as e:
+            await page.wait_for_timeout(8000)
+
+            print("Page loaded:")
+            print(page.url)
+
+            # ------------------------------------------------
+            # Find tables
+            # ------------------------------------------------
+
+            tables = page.locator("table")
+
+            table_count = await tables.count()
 
             print(
-                "Page loading warning:",
-                e
+                f"Tables found: {table_count}"
             )
 
-        await page.wait_for_timeout(
-            WAIT_TIME
-        )
+            if table_count == 0:
 
-        print(
-            "Final URL:",
-            page.url
-        )
-
-        print(
-            "Page title:",
-            await page.title()
-        )
-
-        # ----------------------------------------------------
-        # Find tables
-        # ----------------------------------------------------
-
-        tables = page.locator("table")
-
-        table_count = await tables.count()
-
-        print(
-            f"\nTables found: {table_count}"
-        )
-
-        if table_count == 0:
-
-            await browser.close()
-
-            raise RuntimeError(
-                "No tables found on InvestorGain."
-            )
-
-        # ----------------------------------------------------
-        # Find correct GMP table
-        # ----------------------------------------------------
-
-        correct_table = None
-
-        for i in range(table_count):
-
-            table = tables.nth(i)
-
-            try:
-
-                table_text = clean_text(
-                    await table.inner_text()
+                raise Exception(
+                    "No tables found on InvestorGain."
                 )
 
-            except:
+            # ------------------------------------------------
+            # Find correct table
+            # ------------------------------------------------
 
-                continue
+            selected_table = None
 
-            # The correct table normally contains
-            # several of these fields.
+            for i in range(table_count):
 
-            score = 0
+                table = tables.nth(i)
 
-            if "GMP" in table_text:
-                score += 3
+                text = await table.inner_text()
 
-            if "NAME" in table_text.upper():
-                score += 2
+                if (
+                    "GMP" in text
+                    and "NAME" in text
+                    and "UPDATED-ON" in text
+                ):
 
-            if "PRICE" in table_text.upper():
-                score += 2
+                    selected_table = table
 
-            if "LISTING" in table_text.upper():
-                score += 2
+                    print(
+                        f"Correct GMP table found: Table {i + 1}"
+                    )
 
-            if "IPO" in table_text.upper():
-                score += 1
+                    break
 
-            if score >= 5:
+            if selected_table is None:
 
-                correct_table = table
-
-                print(
-                    f"Correct GMP table found: Table {i + 1}"
+                raise Exception(
+                    "Correct GMP table not found."
                 )
 
-                break
+            # ------------------------------------------------
+            # Read rows
+            # ------------------------------------------------
 
-        if correct_table is None:
+            rows = selected_table.locator("tr")
 
-            await browser.close()
+            row_count = await rows.count()
 
-            raise RuntimeError(
-                "Correct GMP table not found."
+            print(
+                f"Rows found: {row_count}"
             )
 
-        # ----------------------------------------------------
-        # Read rows
-        # ----------------------------------------------------
+            data = []
 
-        rows = correct_table.locator("tr")
+            for i in range(row_count):
 
-        row_count = await rows.count()
-
-        print(
-            f"Rows found: {row_count}"
-        )
-
-        records = []
-
-        # ----------------------------------------------------
-        # Process rows
-        # ----------------------------------------------------
-
-        for row_index in range(
-            row_count
-        ):
-
-            row = rows.nth(
-                row_index
-            )
-
-            try:
+                row = rows.nth(i)
 
                 cells = await row.locator(
                     "th, td"
                 ).all_inner_texts()
 
-            except:
+                cells = [
+                    c.strip()
+                    for c in cells
+                ]
 
-                continue
+                # Skip header
+                if not cells:
+                    continue
 
-            cells = [
-                clean_text(x)
-                for x in cells
-            ]
+                if "NAME" in cells[0].upper():
+                    continue
 
-            # Need at least 10 columns
-            if len(cells) < 10:
-                continue
+                # InvestorGain GMP table normally has 13 columns.
+                if len(cells) < 13:
+                    continue
 
-            # Skip header
-            first_cell = cells[0].upper()
+                # ------------------------------------------------
+                # Map columns
+                # ------------------------------------------------
 
-            if (
-                "NAME" in first_cell
-                or first_cell == ""
-            ):
-                continue
+                name = cells[0]
 
-            # ------------------------------------------------
-            # Expected columns
-            #
-            # 0 NAME
-            # 1 GMP
-            # 2 RATING
-            # 3 SUB
-            # 4 PRICE
-            # 5 IPO SIZE
-            # 6 LOT
-            # 7 OPEN
-            # 8 CLOSE
-            # 9 BOA DT
-            # 10 LISTING
-            # 11 UPDATED
-            # 12 ANCHOR
-            # ------------------------------------------------
-
-            try:
-
-                name_raw = cells[0]
-
-                gmp_raw = cells[1]
+                raw_gmp = cells[1]
 
                 rating = cells[2]
 
-                subscription_raw = cells[3]
+                subscription = cells[3]
 
-                price_raw = cells[4]
+                ipo_price = cells[4]
 
                 ipo_size = cells[5]
 
-                lot_raw = cells[6]
+                lot_size = cells[6]
 
-                open_raw = cells[7]
+                open_date = cells[7]
 
-                close_raw = cells[8]
+                close_date = cells[8]
 
                 boa_date = cells[9]
 
@@ -516,402 +349,454 @@ async def scrape_ipo_gmp():
 
                 anchor = cells[12]
 
-            except IndexError:
+                # ------------------------------------------------
+                # GMP
+                # ------------------------------------------------
 
-                continue
-
-            # ------------------------------------------------
-            # Clean IPO name
-            # ------------------------------------------------
-
-            name = clean_ipo_name(
-                name_raw
-            )
-
-            if not name:
-                continue
-
-            # ------------------------------------------------
-            # GMP
-            # ------------------------------------------------
-
-            (
-                gmp,
-                website_gmp_percent,
-                gmp_down,
-                gmp_up
-            ) = extract_gmp(
-                gmp_raw
-            )
-
-            # ------------------------------------------------
-            # Subscription
-            # ------------------------------------------------
-
-            subscription = (
-                extract_subscription(
-                    subscription_raw
-                )
-            )
-
-            # ------------------------------------------------
-            # IPO price
-            # ------------------------------------------------
-
-            ipo_price = extract_price(
-                price_raw
-            )
-
-            # ------------------------------------------------
-            # Lot size
-            # ------------------------------------------------
-
-            lot_size = extract_number(
-                lot_raw
-            )
-
-            # ------------------------------------------------
-            # Dates
-            # ------------------------------------------------
-
-            open_date = extract_date(
-                open_raw
-            )
-
-            close_date = extract_date(
-                close_raw
-            )
-
-            listing_date = extract_date(
-                listing_date
-            )
-
-            # ------------------------------------------------
-            # Estimated listing price
-            # ------------------------------------------------
-
-            estimated_listing_price = None
-
-            if (
-                gmp is not None
-                and ipo_price is not None
-            ):
-
-                estimated_listing_price = (
-                    ipo_price + gmp
+                gmp = parse_gmp(
+                    raw_gmp
                 )
 
-            # ------------------------------------------------
-            # Calculated GMP %
-            # ------------------------------------------------
-
-            calculated_gmp_percent = None
-
-            if (
-                gmp is not None
-                and ipo_price is not None
-                and ipo_price != 0
-            ):
-
-                calculated_gmp_percent = (
-                    gmp /
-                    ipo_price *
-                    100
+                gmp_percent = parse_gmp_percent(
+                    raw_gmp
                 )
 
+                gmp_down = parse_gmp_down(
+                    raw_gmp
+                )
+
+                gmp_up = parse_gmp_up(
+                    raw_gmp
+                )
+
+                # ------------------------------------------------
+                # Price
+                # ------------------------------------------------
+
+                price = extract_number(
+                    ipo_price
+                )
+
+                # ------------------------------------------------
+                # Estimated Listing Price
+                # ------------------------------------------------
+
+                estimated_listing_price = None
+
+                if (
+                    gmp is not None
+                    and price is not None
+                ):
+
+                    estimated_listing_price = (
+                        price + gmp
+                    )
+
+                # ------------------------------------------------
+                # Calculated GMP %
+                # ------------------------------------------------
+
+                calculated_gmp_percent = None
+
+                if (
+                    gmp is not None
+                    and price is not None
+                    and price != 0
+                ):
+
+                    calculated_gmp_percent = (
+                        gmp / price * 100
+                    )
+
+                # ------------------------------------------------
+                # Updated datetime
+                # ------------------------------------------------
+
+                updated_datetime = parse_updated(
+                    updated
+                )
+
+                # ------------------------------------------------
+                # Save row
+                # ------------------------------------------------
+
+                data.append({
+
+                    "IPO Name": name,
+
+                    "GMP": gmp,
+
+                    "GMP %": gmp_percent,
+
+                    "GMP Down": gmp_down,
+
+                    "GMP Up": gmp_up,
+
+                    "Subscription": subscription,
+
+                    "IPO Price": price,
+
+                    "IPO Size": ipo_size,
+
+                    "Lot Size": extract_number(
+                        lot_size
+                    ),
+
+                    "Open": open_date,
+
+                    "Close": close_date,
+
+                    "BOA Date": boa_date,
+
+                    "Listing Date": listing_date,
+
+                    "Updated": updated,
+
+                    "Anchor": anchor,
+
+                    "Estimated Listing Price":
+                        estimated_listing_price,
+
+                    "Calculated GMP %":
+                        calculated_gmp_percent,
+
+                    "Rating": rating,
+
+                    "Raw GMP": raw_gmp,
+
+                    "Updated Datetime":
+                        updated_datetime
+
+                })
+
             # ------------------------------------------------
-            # Save record
+            # DataFrame
             # ------------------------------------------------
 
-            records.append({
+            df = pd.DataFrame(data)
 
-                "IPO Name": name,
+            if df.empty:
 
-                "GMP": gmp,
+                raise Exception(
+                    "No IPO GMP rows extracted."
+                )
 
-                "GMP %": website_gmp_percent,
-
-                "GMP Down": gmp_down,
-
-                "GMP Up": gmp_up,
-
-                "Subscription": subscription,
-
-                "IPO Price": ipo_price,
-
-                "IPO Size": ipo_size,
-
-                "Lot Size": lot_size,
-
-                "Open": open_date,
-
-                "Close": close_date,
-
-                "BOA Date": boa_date,
-
-                "Listing Date": listing_date,
-
-                "Updated": updated,
-
-                "Anchor": anchor,
-
-                "Estimated Listing Price":
-                    estimated_listing_price,
-
-                "Calculated GMP %":
-                    calculated_gmp_percent,
-
-                "Rating": rating,
-
-                "Raw GMP": gmp_raw,
-
-                "Raw Price": price_raw
-
-            })
-
-        await browser.close()
-
-        # ====================================================
-        # CHECK RESULTS
-        # ====================================================
-
-        print("\n" + "=" * 100)
-        print("SCRAPING RESULT")
-        print("=" * 100)
-
-        print(
-            "Total IPOs found:",
-            len(records)
-        )
-
-        if not records:
-
-            raise RuntimeError(
-                "No IPO GMP records extracted."
+            print(
+                f"\nIPO records extracted: {len(df)}"
             )
 
-        # ====================================================
-        # CREATE DATAFRAME
-        # ====================================================
+            # ====================================================
+            # SORT BY LATEST UPDATED DATE
+            # ====================================================
 
-        df = pd.DataFrame(
-            records
-        )
+            df["Updated Datetime"] = pd.to_datetime(
+                df["Updated Datetime"],
+                errors="coerce"
+            )
 
-        # ====================================================
-        # REMOVE DUPLICATES
-        # ====================================================
+            df = df.sort_values(
+                by="Updated Datetime",
+                ascending=False,
+                na_position="last"
+            ).reset_index(
+                drop=True
+            )
 
-        df = df.drop_duplicates(
-            subset=["IPO Name"],
-            keep="first"
-        )
+            # ------------------------------------------------
+            # Remove helper datetime column
+            # AFTER sorting
+            # ------------------------------------------------
 
-        # ====================================================
-        # ROUND NUMBERS
-        # ====================================================
+            df = df.drop(
+                columns=["Updated Datetime"]
+            )
 
-        numeric_columns = [
+            # ------------------------------------------------
+            # Round numerical columns
+            # ------------------------------------------------
 
-            "GMP",
-            "GMP %",
-            "GMP Down",
-            "GMP Up",
-            "Subscription",
-            "IPO Price",
-            "Lot Size",
-            "Estimated Listing Price",
-            "Calculated GMP %"
-
-        ]
-
-        for column in numeric_columns:
-
-            if column in df.columns:
-
-                df[column] = pd.to_numeric(
-                    df[column],
-                    errors="coerce"
-                )
-
-        df["GMP"] = df["GMP"].round(2)
-
-        df["GMP %"] = df["GMP %"].round(2)
-
-        df["GMP Down"] = (
-            df["GMP Down"].round(2)
-        )
-
-        df["GMP Up"] = (
-            df["GMP Up"].round(2)
-        )
-
-        df["Subscription"] = (
-            df["Subscription"].round(2)
-        )
-
-        df["IPO Price"] = (
-            df["IPO Price"].round(2)
-        )
-
-        df["Lot Size"] = (
-            df["Lot Size"].round(2)
-        )
-
-        df["Estimated Listing Price"] = (
-            df[
-                "Estimated Listing Price"
-            ].round(2)
-        )
-
-        df["Calculated GMP %"] = (
-            df[
+            for column in [
+                "GMP",
+                "GMP %",
+                "GMP Down",
+                "GMP Up",
+                "IPO Price",
+                "Lot Size",
+                "Estimated Listing Price",
                 "Calculated GMP %"
-            ].round(2)
-        )
+            ]:
 
-        # ====================================================
-        # SORT BY LISTING DATE
-        # ====================================================
+                if column in df.columns:
 
-        df["_ListingSort"] = (
-            df["Listing Date"]
-            .apply(date_for_sort)
-        )
+                    df[column] = pd.to_numeric(
+                        df[column],
+                        errors="coerce"
+                    )
 
-        df["_CloseSort"] = (
-            df["Close"]
-            .apply(date_for_sort)
-        )
+                    df[column] = df[column].round(
+                        2
+                    )
 
-        df["_OpenSort"] = (
-            df["Open"]
-            .apply(date_for_sort)
-        )
+            # ====================================================
+            # DISPLAY
+            # ====================================================
 
-        # ----------------------------------------------------
-        # Upcoming dates first
-        # ----------------------------------------------------
+            print("\n")
+            print("=" * 80)
+            print("LATEST IPO GMP DATA")
+            print("=" * 80)
 
-        df = df.sort_values(
-
-            by=[
-                "_ListingSort",
-                "_CloseSort",
-                "_OpenSort"
-            ],
-
-            ascending=[
-                True,
-                True,
-                True
-            ],
-
-            na_position="last"
-
-        )
-
-        # ====================================================
-        # REMOVE SORT COLUMNS
-        # ====================================================
-
-        df = df.drop(
-            columns=[
-                "_ListingSort",
-                "_CloseSort",
-                "_OpenSort"
-            ],
-            errors="ignore"
-        )
-
-        # ====================================================
-        # RESET INDEX
-        # ====================================================
-
-        df = df.reset_index(
-            drop=True
-        )
-
-        # ====================================================
-        # SAVE CSV
-        # ====================================================
-
-        df.to_csv(
-            OUTPUT_FILE,
-            index=False,
-            encoding="utf-8-sig"
-        )
-
-        # ====================================================
-        # DISPLAY RESULT
-        # ====================================================
-
-        print("\n" + "=" * 100)
-        print("FINAL IPO GMP DATA")
-        print("=" * 100)
-
-        display_columns = [
-
-            "IPO Name",
-            "GMP",
-            "GMP %",
-            "GMP Down",
-            "GMP Up",
-            "Subscription",
-            "IPO Price",
-            "IPO Size",
-            "Lot Size",
-            "Open",
-            "Close",
-            "BOA Date",
-            "Listing Date",
-            "Updated",
-            "Anchor",
-            "Estimated Listing Price",
-            "Calculated GMP %",
-            "Rating"
-
-        ]
-
-        print(
-            df[
-                display_columns
-            ].to_string(
-                index=False
+            print(
+                df[
+                    [
+                        "IPO Name",
+                        "GMP",
+                        "GMP %",
+                        "IPO Price",
+                        "Updated"
+                    ]
+                ].to_string(
+                    index=False
+                )
             )
-        )
 
-        # ====================================================
-        # SUMMARY
-        # ====================================================
+            # ====================================================
+            # SAVE CSV
+            # ====================================================
 
-        print("\n" + "=" * 100)
-        print("SUMMARY")
-        print("=" * 100)
+            df.to_csv(
+                CSV_FILE,
+                index=False,
+                encoding="utf-8-sig"
+            )
+
+            print("\n")
+            print("=" * 80)
+            print("CSV SAVED")
+            print("=" * 80)
+
+            print(
+                os.path.abspath(
+                    CSV_FILE
+                )
+            )
+
+            # ====================================================
+            # SAVE JSON BACKUP
+            # ====================================================
+
+            with open(
+                "ipo_gmp_result.json",
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+                json.dump(
+                    df.to_dict(
+                        orient="records"
+                    ),
+                    f,
+                    indent=2,
+                    ensure_ascii=False
+                )
+
+            return df
+
+        finally:
+
+            await browser.close()
+
+
+# ============================================================
+# GOOGLE SHEETS
+# ============================================================
+
+def upload_to_google_sheet(df):
+
+    if not GOOGLE_SHEET_ID:
 
         print(
-            "Total IPOs:",
-            len(df)
+            "\nGOOGLE_SHEET_ID not configured."
         )
 
         print(
-            "CSV file:",
-            OUTPUT_FILE
+            "CSV was saved successfully."
+        )
+
+        return
+
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+
+        print(
+            "\nGOOGLE_SERVICE_ACCOUNT_JSON not configured."
         )
 
         print(
-            "CSV saved successfully."
+            "CSV was saved successfully."
         )
 
-        return df
+        return
+
+    print("\n")
+    print("=" * 80)
+    print("UPLOADING TO GOOGLE SHEETS")
+    print("=" * 80)
+
+    import gspread
+    from google.oauth2.service_account import (
+        Credentials
+    )
+
+    # ------------------------------------------------
+    # Credentials
+    # ------------------------------------------------
+
+    service_account_info = json.loads(
+        GOOGLE_SERVICE_ACCOUNT_JSON
+    )
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    credentials = Credentials.from_service_account_info(
+        service_account_info,
+        scopes=scopes
+    )
+
+    client = gspread.authorize(
+        credentials
+    )
+
+    spreadsheet = client.open_by_key(
+        GOOGLE_SHEET_ID
+    )
+
+    # ------------------------------------------------
+    # Get / create worksheet
+    # ------------------------------------------------
+
+    try:
+
+        worksheet = spreadsheet.worksheet(
+            SHEET_NAME
+        )
+
+    except gspread.WorksheetNotFound:
+
+        worksheet = spreadsheet.add_worksheet(
+            title=SHEET_NAME,
+            rows=2000,
+            cols=30
+        )
+
+    # ------------------------------------------------
+    # Clear old data
+    # ------------------------------------------------
+
+    worksheet.clear()
+
+    # ------------------------------------------------
+    # Convert NaN to blank
+    # ------------------------------------------------
+
+    upload_df = df.copy()
+
+    upload_df = upload_df.where(
+        pd.notnull(upload_df),
+        ""
+    )
+
+    # ------------------------------------------------
+    # Convert values
+    # ------------------------------------------------
+
+    values = [
+        upload_df.columns.tolist()
+    ] + upload_df.astype(str).values.tolist()
+
+    # ------------------------------------------------
+    # Upload
+    # ------------------------------------------------
+
+    worksheet.update(
+        values,
+        "A1"
+    )
+
+    # ------------------------------------------------
+    # Freeze header
+    # ------------------------------------------------
+
+    worksheet.freeze(rows=1)
+
+    # ------------------------------------------------
+    # Bold header
+    # ------------------------------------------------
+
+    worksheet.format(
+        "A1:R1",
+        {
+            "textFormat": {
+                "bold": True
+            }
+        }
+    )
+
+    print(
+        "Google Sheet updated successfully."
+    )
+
+    print(
+        f"Worksheet: {SHEET_NAME}"
+    )
 
 
 # ============================================================
 # MAIN
 # ============================================================
 
+async def main():
+
+    print("\n")
+    print("=" * 80)
+    print("IPO GMP SCRAPER STARTED")
+    print("=" * 80)
+
+    try:
+
+        df = await scrape_ipo_gmp()
+
+        upload_to_google_sheet(
+            df
+        )
+
+        print("\n")
+        print("=" * 80)
+        print("PROCESS COMPLETED SUCCESSFULLY")
+        print("=" * 80)
+
+    except Exception as e:
+
+        print("\n")
+        print("=" * 80)
+        print("ERROR")
+        print("=" * 80)
+
+        print(
+            repr(e)
+        )
+
+        raise
+
+
+# ============================================================
+# RUN
+# ============================================================
+
 if __name__ == "__main__":
 
     asyncio.run(
-        scrape_ipo_gmp()
+        main()
     )
