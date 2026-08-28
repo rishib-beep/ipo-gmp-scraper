@@ -1,13 +1,23 @@
 <!DOCTYPE html>
 
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>IPO GMP Dashboard | Live IPO Grey Market Premium</title>
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+   content="width=device-width, initial-scale=1.0">
+
+<title>IPO GMP Analysis Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
+
+/* =========================================================
+   GENERAL
+========================================================= */
 
 * {
     box-sizing: border-box;
@@ -16,380 +26,239 @@
 body {
     margin: 0;
     font-family: Arial, Helvetica, sans-serif;
-    background: #f4f7fb;
-    color: #172033;
+    background: #f3f4f6;
+    color: #111827;
 }
 
-/* =========================
+
+/* =========================================================
    HEADER
-========================= */
+========================================================= */
 
-.header {
-    background: linear-gradient(135deg, #111827, #1e3a8a);
+header {
+    background: #111827;
     color: white;
-    padding: 24px 30px;
+    padding: 20px 30px;
+    text-align: center;
 }
 
-.header-inner {
-    max-width: 1500px;
-    margin: auto;
-}
-
-.header h1 {
+header h1 {
     margin: 0;
     font-size: 28px;
 }
 
-.header p {
+header p {
     margin: 7px 0 0;
-    opacity: 0.85;
+    color: #d1d5db;
 }
 
-/* =========================
-   MAIN
-========================= */
+
+/* =========================================================
+   MAIN CONTAINER
+========================================================= */
 
 .container {
-    max-width: 1500px;
+    width: 96%;
+    max-width: 1600px;
     margin: auto;
-    padding: 22px;
+    padding: 20px 0;
 }
 
-/* =========================
-   STAT CARDS
-========================= */
 
-.stats {
-    display: grid;
-    grid-template-columns:
-        repeat(5, minmax(150px, 1fr));
+/* =========================================================
+   CARD
+========================================================= */
 
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.stat-card {
+.card {
     background: white;
     border-radius: 12px;
-    padding: 18px;
-    box-shadow:
-        0 3px 12px rgba(0,0,0,0.07);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
 
-.stat-title {
-    color: #6b7280;
-    font-size: 13px;
-    margin-bottom: 8px;
+
+/* =========================================================
+   CONTROLS
+========================================================= */
+
+.controls {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: end;
 }
 
-.stat-value {
-    font-size: 24px;
+.control-group {
+    min-width: 280px;
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 7px;
     font-weight: bold;
 }
 
-/* =========================
-   CONTROLS
-========================= */
-
-.controls {
-    background: white;
-    padding: 16px;
-    border-radius: 12px;
-    margin-bottom: 18px;
-
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-
-    box-shadow:
-        0 3px 12px rgba(0,0,0,0.07);
-}
-
-.search {
-    flex: 1;
-    min-width: 250px;
-
-    padding: 11px 14px;
-
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-
-    font-size: 14px;
-}
-
 select,
-button {
-
-    padding: 11px 14px;
-
+input {
+    width: 100%;
+    padding: 11px 12px;
     border: 1px solid #d1d5db;
-
-    border-radius: 8px;
-
+    border-radius: 7px;
+    font-size: 15px;
     background: white;
+}
 
-    cursor: pointer;
+select:focus,
+input:focus {
+    outline: none;
+    border-color: #2563eb;
+}
 
+
+/* =========================================================
+   CHART
+========================================================= */
+
+.chart-card {
+    padding: 20px 25px 25px;
+}
+
+.chart-header {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.chart-header h2 {
+    margin: 0;
+    font-size: 23px;
+}
+
+.chart-header p {
+    margin: 7px 0 0;
+    color: #6b7280;
     font-size: 14px;
 }
 
-button {
-
-    background: #2563eb;
-
-    color: white;
-
-    border: none;
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 480px;
 }
 
-button:hover {
-    background: #1d4ed8;
-}
 
-/* =========================
+/* =========================================================
    STATUS
-========================= */
+========================================================= */
 
 .status {
-
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-    margin-bottom: 12px;
-
-    color: #6b7280;
-
-    font-size: 13px;
-
+    padding: 10px 14px;
+    background: #eef2ff;
+    border-radius: 7px;
+    color: #3730a3;
+    font-size: 14px;
 }
 
-/* =========================
+
+/* =========================================================
+   CURRENT DATA
+========================================================= */
+
+.section-title {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+
+/* =========================================================
    TABLE
-========================= */
+========================================================= */
 
 .table-wrapper {
-
-    background: white;
-
-    border-radius: 12px;
-
+    width: 100%;
     overflow-x: auto;
-
-    box-shadow:
-        0 3px 12px rgba(0,0,0,0.07);
+    max-height: 650px;
 }
 
 table {
-
     width: 100%;
-
-    min-width: 1500px;
-
     border-collapse: collapse;
+    min-width: 1200px;
+    font-size: 14px;
 }
 
-thead {
-
-    background: #111827;
-
-    color: white;
-}
-
-th {
-
-    padding: 13px 12px;
-
-    text-align: center;
-
-    font-size: 13px;
-
-    cursor: pointer;
-
-    white-space: nowrap;
-}
-
-th:hover {
-
+thead th {
+    position: sticky;
+    top: 0;
     background: #1f2937;
+    color: white;
+    padding: 11px 10px;
+    text-align: left;
+    z-index: 5;
 }
 
-td {
-
-    padding: 12px;
-
-    border-bottom:
-        1px solid #edf0f4;
-
-    text-align: center;
-
-    font-size: 13px;
-
+tbody td {
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
     white-space: nowrap;
 }
 
 tbody tr:hover {
-
-    background: #f8fafc;
+    background: #f3f4f6;
+    cursor: pointer;
 }
-
-/* =========================
-   IPO NAME
-========================= */
 
 .ipo-name {
-
-    font-weight: 600;
-
-    text-align: left;
-
-    color: #1d4ed8;
+    font-weight: bold;
 }
 
-/* =========================
-   GMP
-========================= */
-
 .gmp-positive {
-
-    color: #15803d;
-
     font-weight: bold;
 }
 
 .gmp-negative {
-
-    color: #dc2626;
-
     font-weight: bold;
 }
 
-.gmp-zero {
 
-    color: #6b7280;
+/* =========================================================
+   BADGES
+========================================================= */
 
-    font-weight: bold;
-}
-
-/* =========================
-   GMP BADGE
-========================= */
-
-.gmp-badge {
-
+.badge {
     display: inline-block;
-
-    padding: 5px 9px;
-
-    border-radius: 6px;
-
-    font-weight: bold;
-}
-
-.gmp-up {
-
-    background: #dcfce7;
-
-    color: #166534;
-}
-
-.gmp-down {
-
-    background: #fee2e2;
-
-    color: #991b1b;
-}
-
-.gmp-neutral {
-
-    background: #f3f4f6;
-
-    color: #4b5563;
-}
-
-/* =========================
-   RATING
-========================= */
-
-.rating {
-
-    font-size: 16px;
-
-    letter-spacing: 1px;
-}
-
-/* =========================
-   LISTING PRICE
-========================= */
-
-.listing-price {
-
-    font-weight: bold;
-
-    color: #2563eb;
-}
-
-/* =========================
-   FOOTER
-========================= */
-
-.footer {
-
-    max-width: 1500px;
-
-    margin: 25px auto;
-
-    padding: 20px;
-
-    text-align: center;
-
-    color: #6b7280;
-
+    padding: 4px 8px;
+    border-radius: 20px;
     font-size: 12px;
+    font-weight: bold;
 }
 
-/* =========================
-   LOADING
-========================= */
 
-.loading {
-
-    padding: 50px;
-
-    text-align: center;
-
-    color: #6b7280;
-}
-
-/* =========================
+/* =========================================================
    MOBILE
-========================= */
+========================================================= */
 
-@media (max-width: 800px) {
+@media (max-width: 700px) {
 
-    .header {
-        padding: 20px;
-    }
-
-    .header h1 {
-        font-size: 22px;
+    header h1 {
+        font-size: 21px;
     }
 
     .container {
-        padding: 12px;
+        width: 94%;
     }
 
-    .stats {
-
-        grid-template-columns:
-            repeat(2, 1fr);
-
+    .control-group {
+        width: 100%;
+        min-width: 100%;
     }
 
-    .stat-value {
-        font-size: 20px;
+    .chart-container {
+        height: 350px;
+    }
+
+    .card {
+        padding: 15px;
     }
 
 }
@@ -400,370 +269,234 @@ tbody tr:hover {
 
 <body>
 
-<!-- ======================================================
+<!-- =========================================================
      HEADER
-====================================================== -->
+========================================================= -->
 
-<div class="header">
+<header>
 
 ```
-<div class="header-inner">
+<h1>📊 IPO GMP Analysis Dashboard</h1>
 
-    <h1>
-        📊 IPO GMP Dashboard
-    </h1>
-
-    <p>
-        Live IPO Grey Market Premium & Listing Estimate
-    </p>
-
-</div>
+<p>
+    Live IPO Grey Market Premium & GMP Trend
+</p>
 ```
 
-</div>
-
-<!-- ======================================================
-     MAIN
-====================================================== -->
+</header>
 
 <div class="container">
 
-<!-- ======================================================
-     STATISTICS
-====================================================== -->
+<!-- =========================================================
+     IPO SELECTOR — TOP
+========================================================= -->
 
-<div class="stats">
+<div class="card">
 
 ```
-<div class="stat-card">
-
-    <div class="stat-title">
-        Total IPOs
-    </div>
-
-    <div
-        class="stat-value"
-        id="totalIPO">
-        -
-    </div>
-
-</div>
-
-
-<div class="stat-card">
-
-    <div class="stat-title">
-        Positive GMP
-    </div>
-
-    <div
-        class="stat-value"
-        id="positiveGMP">
-        -
-    </div>
-
-</div>
-
-
-<div class="stat-card">
-
-    <div class="stat-title">
-        Highest GMP
-    </div>
-
-    <div
-        class="stat-value"
-        id="highestGMP">
-        -
-    </div>
-
-</div>
-
-
-<div class="stat-card">
-
-    <div class="stat-title">
-        Highest GMP %
-    </div>
-
-    <div
-        class="stat-value"
-        id="highestGMPPercent">
-        -
-    </div>
-
-</div>
-
-
-<div class="stat-card">
-
-    <div class="stat-title">
-        Last Update
-    </div>
-
-    <div
-        class="stat-value"
-        id="lastUpdate"
-        style="font-size:16px;">
-        -
-    </div>
-
-</div>
-```
-
-</div>
-
-<!-- ======================================================
-     CONTROLS
-====================================================== -->
-
 <div class="controls">
 
-```
-<input
-    type="text"
-    id="search"
-    class="search"
-    placeholder="🔎 Search IPO name..."
->
+    <div class="control-group">
+
+        <label for="ipoSelect">
+            Select IPO
+        </label>
+
+        <select id="ipoSelect">
+
+            <option value="">
+                Loading IPOs...
+            </option>
+
+        </select>
+
+    </div>
 
 
-<select id="gmpFilter">
+    <div class="control-group">
 
-    <option value="all">
-        All GMP
-    </option>
+        <label for="searchBox">
+            Search IPO
+        </label>
 
-    <option value="positive">
-        Positive GMP
-    </option>
+        <input
+            type="text"
+            id="searchBox"
+            placeholder="Search IPO..."
+        >
 
-    <option value="zero">
-        GMP = 0
-    </option>
+    </div>
 
-    <option value="negative">
-        Negative GMP
-    </option>
-
-</select>
-
-
-<select id="sortSelect">
-
-    <option value="updated">
-        Latest Updated
-    </option>
-
-    <option value="gmp">
-        Highest GMP
-    </option>
-
-    <option value="gmpPercent">
-        Highest GMP %
-    </option>
-
-    <option value="subscription">
-        Highest Subscription
-    </option>
-
-    <option value="ipoPrice">
-        IPO Price
-    </option>
-
-    <option value="listingPrice">
-        Estimated Listing Price
-    </option>
-
-    <option value="name">
-        IPO Name
-    </option>
-
-</select>
-
-
-<button onclick="loadCSV()">
-    🔄 Refresh
-</button>
+</div>
 ```
 
 </div>
 
-<!-- ======================================================
+<!-- =========================================================
+     GMP TREND — TOP OF PAGE
+========================================================= -->
+
+<div class="card chart-card">
+
+```
+<div class="chart-header">
+
+    <h2 id="chartTitle">
+        GMP % Trend
+    </h2>
+
+    <p>
+        X-axis: Date &nbsp; | &nbsp;
+        Y-axis: GMP %
+    </p>
+
+</div>
+
+
+<div class="chart-container">
+
+    <canvas id="gmpChart"></canvas>
+
+</div>
+```
+
+</div>
+
+<!-- =========================================================
      STATUS
-====================================================== -->
+========================================================= -->
 
-<div class="status">
+<div class="card">
 
 ```
-<span id="status">
-    Loading IPO data...
-</span>
+<div
+    class="status"
+    id="status">
 
-<span>
-    Auto refresh: 5 minutes
-</span>
+    Loading GMP data...
+
+</div>
 ```
 
 </div>
 
-<!-- ======================================================
-     TABLE
-====================================================== -->
+<!-- =========================================================
+     CURRENT GMP TABLE
+========================================================= -->
+
+<div class="card">
+
+```
+<h2 class="section-title">
+    Current IPO GMP
+</h2>
+
 
 <div class="table-wrapper">
 
-<table>
+    <table>
 
-<thead>
+        <thead>
 
-<tr>
+            <tr>
 
-```
-<th onclick="sortBy('IPO Name')">
-    IPO Name
-</th>
+                <th>IPO Name</th>
 
-<th onclick="sortBy('GMP')">
-    GMP
-</th>
+                <th>GMP</th>
 
-<th onclick="sortBy('GMP %')">
-    GMP %
-</th>
+                <th>GMP %</th>
 
-<th>
-    GMP Down
-</th>
+                <th>GMP Down</th>
 
-<th>
-    GMP Up
-</th>
+                <th>GMP Up</th>
 
-<th>
-    Subscription
-</th>
+                <th>Subscription</th>
 
-<th>
-    IPO Price
-</th>
+                <th>IPO Price</th>
 
-<th>
-    IPO Size
-</th>
+                <th>IPO Size</th>
 
-<th>
-    Lot Size
-</th>
+                <th>Lot Size</th>
 
-<th>
-    Open
-</th>
+                <th>Open</th>
 
-<th>
-    Close
-</th>
+                <th>Close</th>
 
-<th>
-    BOA Date
-</th>
+                <th>BOA Date</th>
 
-<th>
-    Listing Date
-</th>
+                <th>Listing Date</th>
 
-<th onclick="sortBy('Updated')">
-    Updated
-</th>
+                <th>Updated</th>
 
-<th>
-    Anchor
-</th>
+                <th>Anchor</th>
 
-<th>
-    Estimated Listing
-</th>
+                <th>Estimated Listing</th>
 
-<th>
-    Rating
-</th>
-```
+            </tr>
 
-</tr>
+        </thead>
 
-</thead>
 
-<tbody id="tableBody">
+        <tbody id="ipoTableBody">
 
-<tr>
+        </tbody>
 
-<td
-    colspan="17"
-    class="loading">
-
-Loading...
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
+    </table>
 
 </div>
+```
 
 </div>
-
-<!-- ======================================================
-     FOOTER
-====================================================== -->
-
-<div class="footer">
-
-```
-IPO GMP data is indicative and sourced from grey-market
-information. It does not guarantee listing gains.
-
-<br><br>
-
-Last automatic refresh:
-<span id="refreshTime">
-    -
-</span>
-```
 
 </div>
 
 <script>
 
 
-// ============================================================
-// GLOBAL DATA
-// ============================================================
+/* =========================================================
+   FILE LOCATIONS
+========================================================= */
 
-let allData = [];
+const CURRENT_CSV =
+"https://raw.githubusercontent.com/rishib-beep/ipo-gmp-scraper/main/ipo_gmp_result.csv";
 
-let headers = [];
+
+const HISTORY_CSV =
+"https://raw.githubusercontent.com/rishib-beep/ipo-gmp-scraper/main/ipo_gmp_history.csv";
 
 
-// ============================================================
-// CSV URL
-// ============================================================
+/* =========================================================
+   GLOBAL VARIABLES
+========================================================= */
 
-function csvURL() {
+let ipoData = [];
 
-    return (
-        "ipo_gmp_result.csv?t=" +
-        Date.now()
-    );
+let historyData = [];
+
+let selectedIPO = "";
+
+let gmpChart = null;
+
+
+/* =========================================================
+   NORMALIZE
+========================================================= */
+
+function normalize(value) {
+
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\ufeff/g, "")
+        .replace(/\s+/g, " ")
+        .replace(/[^\w %()/-]/g, "");
 
 }
 
 
-// ============================================================
-// CSV PARSER
-// ============================================================
+/* =========================================================
+   CSV PARSER
+========================================================= */
 
 function parseCSV(text) {
 
@@ -776,11 +509,7 @@ function parseCSV(text) {
     let insideQuotes = false;
 
 
-    for (
-        let i = 0;
-        i < text.length;
-        i++
-    ) {
+    for (let i = 0; i < text.length; i++) {
 
         const char = text[i];
 
@@ -789,6 +518,7 @@ function parseCSV(text) {
 
         if (
             char === '"' &&
+            insideQuotes &&
             next === '"'
         ) {
 
@@ -798,9 +528,7 @@ function parseCSV(text) {
 
         }
 
-        else if (
-            char === '"'
-        ) {
+        else if (char === '"') {
 
             insideQuotes =
                 !insideQuotes;
@@ -808,7 +536,7 @@ function parseCSV(text) {
         }
 
         else if (
-            char === ',' &&
+            char === "," &&
             !insideQuotes
         ) {
 
@@ -820,29 +548,36 @@ function parseCSV(text) {
 
         else if (
             (
-                char === '\n' ||
-                char === '\r'
-            )
-            &&
+                char === "\n" ||
+                char === "\r"
+            ) &&
             !insideQuotes
         ) {
 
             if (
-                char === '\r' &&
-                next === '\n'
+                value !== "" ||
+                row.length > 0
+            ) {
+
+                row.push(value);
+
+                rows.push(row);
+
+            }
+
+            value = "";
+
+            row = [];
+
+
+            if (
+                char === "\r" &&
+                next === "\n"
             ) {
 
                 i++;
 
             }
-
-            row.push(value);
-
-            rows.push(row);
-
-            row = [];
-
-            value = "";
 
         }
 
@@ -856,8 +591,8 @@ function parseCSV(text) {
 
 
     if (
-        value.length ||
-        row.length
+        value !== "" ||
+        row.length > 0
     ) {
 
         row.push(value);
@@ -872,944 +607,337 @@ function parseCSV(text) {
 }
 
 
-// ============================================================
-// NUMBER
-// ============================================================
+/* =========================================================
+   CSV TO OBJECTS
+========================================================= */
 
-function number(value) {
+function csvToObjects(text) {
 
-    if (
-        value === null ||
-        value === undefined
-    ) {
+    const rows =
+        parseCSV(text);
 
-        return NaN;
+
+    if (rows.length < 2) {
+
+        return [];
 
     }
 
 
-    const n =
-        parseFloat(
-            String(value)
-                .replace(/₹/g, "")
-                .replace(/,/g, "")
-                .replace(/%/g, "")
-                .replace(/x/g, "")
-                .trim()
+    const headers =
+        rows[0].map(normalize);
+
+
+    const result = [];
+
+
+    for (
+        let i = 1;
+        i < rows.length;
+        i++
+    ) {
+
+        const row = {};
+
+
+        headers.forEach(
+            (header, index) => {
+
+                row[header] =
+                    rows[i][index] !== undefined
+                    ? rows[i][index].trim()
+                    : "";
+
+            }
         );
 
 
-    return n;
+        result.push(row);
+
+    }
+
+
+    return result;
 
 }
 
 
-// ============================================================
-// ESCAPE HTML
-// ============================================================
+/* =========================================================
+   GET COLUMN
+========================================================= */
 
-function escapeHTML(value) {
+function getValue(row, names) {
+
+    for (
+        const name of names
+    ) {
+
+        const key =
+            normalize(name);
+
+
+        if (
+            row[key] !== undefined
+        ) {
+
+            return row[key];
+
+        }
+
+    }
+
+
+    return "";
+
+}
+
+
+/* =========================================================
+   NUMBER
+========================================================= */
+
+function getNumber(value) {
 
     if (
         value === null ||
-        value === undefined
+        value === undefined ||
+        value === ""
     ) {
+
+        return null;
+
+    }
+
+
+    const cleaned =
+        String(value)
+        .replace(/,/g, "")
+        .replace(/₹/g, "")
+        .replace(/%/g, "");
+
+
+    const match =
+        cleaned.match(
+            /-?\d+(\.\d+)?/
+        );
+
+
+    if (!match) {
+
+        return null;
+
+    }
+
+
+    return parseFloat(match[0]);
+
+}
+
+
+/* =========================================================
+   IPO NAME
+========================================================= */
+
+function getIPOName(row) {
+
+    return getValue(
+        row,
+        [
+            "IPO Name",
+            "Name",
+            "IPO",
+            "Company"
+        ]
+    );
+
+}
+
+
+/* =========================================================
+   DATE PARSER
+========================================================= */
+
+function parseDate(value) {
+
+    if (!value) {
+
+        return null;
+
+    }
+
+
+    value =
+        String(value).trim();
+
+
+    /*
+       ISO DATE
+    */
+
+    let date =
+        new Date(value);
+
+
+    if (
+        !isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return date;
+
+    }
+
+
+    /*
+       DD-MMM
+       Example: 27-Aug
+    */
+
+    const match =
+        value.match(
+            /(\d{1,2})-([A-Za-z]{3})/
+        );
+
+
+    if (match) {
+
+        const day =
+            parseInt(match[1]);
+
+
+        const months = {
+
+            Jan: 0,
+            Feb: 1,
+            Mar: 2,
+            Apr: 3,
+            May: 4,
+            Jun: 5,
+            Jul: 6,
+            Aug: 7,
+            Sep: 8,
+            Oct: 9,
+            Nov: 10,
+            Dec: 11
+
+        };
+
+
+        const month =
+            months[match[2]];
+
+
+        if (
+            month !== undefined
+        ) {
+
+            return new Date(
+                new Date().getFullYear(),
+                month,
+                day
+            );
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   FORMAT DATE
+========================================================= */
+
+function formatDate(date) {
+
+    if (!date) {
 
         return "";
 
     }
 
 
-    return String(value)
-
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-
-        .replace(
-            /</g,
-            "&lt;"
-        )
-
-        .replace(
-            />/g,
-            "&gt;"
-        )
-
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+    return date.toLocaleDateString(
+        "en-IN",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        }
+    );
 
 }
 
 
-// ============================================================
-// COLUMN INDEX
-// ============================================================
+/* =========================================================
+   LOAD CURRENT CSV
+========================================================= */
 
-function columnIndex(name) {
+async function loadCurrentCSV() {
 
-    return headers.indexOf(name);
-
-}
-
-
-// ============================================================
-// UPDATE STATISTICS
-// ============================================================
-
-function updateStats(data) {
-
-    const rows =
-        data.slice(1);
-
-
-    document.getElementById(
-        "totalIPO"
-    ).innerText =
-        rows.length;
-
-
-    let positive = 0;
-
-    let highestGMP = -Infinity;
-
-    let highestPercent = -Infinity;
-
-    let latest = "";
-
-
-    rows.forEach(row => {
-
-        const gmp =
-            number(
-                row[
-                    columnIndex("GMP")
-                ]
-            );
-
-
-        const percent =
-            number(
-                row[
-                    columnIndex("GMP %")
-                ]
-            );
-
-
-        if (
-            !isNaN(gmp) &&
-            gmp > 0
-        ) {
-
-            positive++;
-
-        }
-
-
-        if (
-            !isNaN(gmp) &&
-            gmp > highestGMP
-        ) {
-
-            highestGMP = gmp;
-
-        }
-
-
-        if (
-            !isNaN(percent) &&
-            percent > highestPercent
-        ) {
-
-            highestPercent =
-                percent;
-
-        }
-
-
-        const updated =
-            row[
-                columnIndex("Updated")
-            ];
-
-
-        if (
-            !latest &&
-            updated
-        ) {
-
-            latest = updated;
-
-        }
-
-    });
-
-
-    document.getElementById(
-        "positiveGMP"
-    ).innerText =
-        positive;
-
-
-    document.getElementById(
-        "highestGMP"
-    ).innerText =
-        isFinite(highestGMP)
-        ? "₹" + highestGMP
-        : "-";
-
-
-    document.getElementById(
-        "highestGMPPercent"
-    ).innerText =
-        isFinite(highestPercent)
-        ? highestPercent + "%"
-        : "-";
-
-
-    document.getElementById(
-        "lastUpdate"
-    ).innerText =
-        latest || "-";
-
-}
-
-
-// ============================================================
-// RENDER TABLE
-// ============================================================
-
-function renderTable(data) {
-
-    const body =
-        document.getElementById(
-            "tableBody"
+    const response =
+        await fetch(
+            CURRENT_CSV +
+            "?t=" +
+            Date.now()
         );
 
 
-    body.innerHTML = "";
-
-
-    if (
-        data.length <= 1
-    ) {
-
-        body.innerHTML = `
-
-            <tr>
-
-                <td
-                    colspan="17"
-                    class="loading">
-
-                    No IPO data found.
-
-                </td>
-
-            </tr>
-
-        `;
-
-        return;
-
-    }
-
-
-    const rows =
-        data.slice(1);
-
-
-    rows.forEach(row => {
-
-        const tr =
-            document.createElement(
-                "tr"
-            );
-
-
-        const name =
-            row[
-                columnIndex(
-                    "IPO Name"
-                )
-            ] || "";
-
-
-        const gmp =
-            number(
-                row[
-                    columnIndex(
-                        "GMP"
-                    )
-                ]
-            );
-
-
-        const gmpPercent =
-            number(
-                row[
-                    columnIndex(
-                        "GMP %"
-                    )
-                ]
-            );
-
-
-        const gmpDown =
-            row[
-                columnIndex(
-                    "GMP Down"
-                )
-            ] || "";
-
-
-        const gmpUp =
-            row[
-                columnIndex(
-                    "GMP Up"
-                )
-            ] || "";
-
-
-        const subscription =
-            row[
-                columnIndex(
-                    "Subscription"
-                )
-            ] || "";
-
-
-        const ipoPrice =
-            row[
-                columnIndex(
-                    "IPO Price"
-                )
-            ] || "";
-
-
-        const ipoSize =
-            row[
-                columnIndex(
-                    "IPO Size"
-                )
-            ] || "";
-
-
-        const lotSize =
-            row[
-                columnIndex(
-                    "Lot Size"
-                )
-            ] || "";
-
-
-        const open =
-            row[
-                columnIndex(
-                    "Open"
-                )
-            ] || "";
-
-
-        const close =
-            row[
-                columnIndex(
-                    "Close"
-                )
-            ] || "";
-
-
-        const boa =
-            row[
-                columnIndex(
-                    "BOA Date"
-                )
-            ] || "";
-
-
-        const listing =
-            row[
-                columnIndex(
-                    "Listing Date"
-                )
-            ] || "";
-
-
-        const updated =
-            row[
-                columnIndex(
-                    "Updated"
-                )
-            ] || "";
-
-
-        const anchor =
-            row[
-                columnIndex(
-                    "Anchor"
-                )
-            ] || "";
-
-
-        const estimated =
-            row[
-                columnIndex(
-                    "Estimated Listing Price"
-                )
-            ] || "";
-
-
-        const rating =
-            row[
-                columnIndex(
-                    "Rating"
-                )
-            ] || "";
-
-
-        // GMP badge
-
-        let gmpClass =
-            "gmp-neutral";
-
-
-        if (
-            !isNaN(gmp) &&
-            gmp > 0
-        ) {
-
-            gmpClass =
-                "gmp-up";
-
-        }
-
-        else if (
-            !isNaN(gmp) &&
-            gmp < 0
-        ) {
-
-            gmpClass =
-                "gmp-down";
-
-        }
-
-
-        // GMP %
-
-        let percentClass =
-            "";
-
-
-        if (
-            !isNaN(gmpPercent) &&
-            gmpPercent > 0
-        ) {
-
-            percentClass =
-                "gmp-positive";
-
-        }
-
-        else if (
-            !isNaN(gmpPercent) &&
-            gmpPercent < 0
-        ) {
-
-            percentClass =
-                "gmp-negative";
-
-        }
-
-
-        tr.innerHTML = `
-
-            <td class="ipo-name">
-                ${escapeHTML(name)}
-            </td>
-
-
-            <td>
-
-                <span
-                    class="gmp-badge ${gmpClass}">
-
-                    ${
-                        isNaN(gmp)
-                        ? "-"
-                        : "₹" + gmp
-                    }
-
-                </span>
-
-            </td>
-
-
-            <td
-                class="${percentClass}">
-
-                ${
-                    isNaN(gmpPercent)
-                    ? "-"
-                    : gmpPercent + "%"
-                }
-
-            </td>
-
-
-            <td>
-                ${escapeHTML(gmpDown)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(gmpUp)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(subscription)}
-            </td>
-
-
-            <td>
-                ₹${escapeHTML(ipoPrice)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(ipoSize)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(lotSize)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(open)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(close)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(boa)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(listing)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(updated)}
-            </td>
-
-
-            <td>
-                ${escapeHTML(anchor)}
-            </td>
-
-
-            <td class="listing-price">
-
-                ${
-                    estimated
-                    ? "₹" +
-                      escapeHTML(
-                          estimated
-                      )
-                    : "-"
-                }
-
-            </td>
-
-
-            <td class="rating">
-
-                ${escapeHTML(rating)}
-
-            </td>
-
-        `;
-
-
-        body.appendChild(tr);
-
-    });
-
-}
-
-
-// ============================================================
-// FILTER + SORT
-// ============================================================
-
-function applyFilters() {
-
-    if (
-        allData.length <= 1
-    ) {
-
-        return;
-
-    }
-
-
-    const search =
-        document
-            .getElementById(
-                "search"
-            )
-            .value
-            .toLowerCase()
-            .trim();
-
-
-    const filter =
-        document
-            .getElementById(
-                "gmpFilter"
-            )
-            .value;
-
-
-    const sort =
-        document
-            .getElementById(
-                "sortSelect"
-            )
-            .value;
-
-
-    const originalHeader =
-        allData[0];
-
-
-    let rows =
-        allData.slice(1);
-
-
-    // SEARCH
-
-    if (search) {
-
-        rows =
-            rows.filter(row =>
-
-                row.some(value =>
-
-                    String(value)
-                        .toLowerCase()
-                        .includes(search)
-
-                )
-
-            );
-
-    }
-
-
-    // GMP FILTER
-
-    if (
-        filter !== "all"
-    ) {
-
-        rows =
-            rows.filter(row => {
-
-                const gmp =
-                    number(
-                        row[
-                            columnIndex(
-                                "GMP"
-                            )
-                        ]
-                    );
-
-
-                if (
-                    filter === "positive"
-                ) {
-
-                    return gmp > 0;
-
-                }
-
-
-                if (
-                    filter === "zero"
-                ) {
-
-                    return gmp === 0;
-
-                }
-
-
-                if (
-                    filter === "negative"
-                ) {
-
-                    return gmp < 0;
-
-                }
-
-
-                return true;
-
-            });
-
-    }
-
-
-    // SORT
-
-    rows.sort((a, b) => {
-
-        if (
-            sort === "name"
-        ) {
-
-            return String(
-                a[
-                    columnIndex(
-                        "IPO Name"
-                    )
-                ]
-            ).localeCompare(
-                String(
-                    b[
-                        columnIndex(
-                            "IPO Name"
-                        )
-                    ]
-                )
-            );
-
-        }
-
-
-        if (
-            sort === "gmp"
-        ) {
-
-            return number(
-                b[
-                    columnIndex(
-                        "GMP"
-                    )
-                ]
-            ) -
-            number(
-                a[
-                    columnIndex(
-                        "GMP"
-                    )
-                ]
-            );
-
-        }
-
-
-        if (
-            sort === "gmpPercent"
-        ) {
-
-            return number(
-                b[
-                    columnIndex(
-                        "GMP %"
-                    )
-                ]
-            ) -
-            number(
-                a[
-                    columnIndex(
-                        "GMP %"
-                    )
-                ]
-            );
-
-        }
-
-
-        if (
-            sort === "subscription"
-        ) {
-
-            return number(
-                b[
-                    columnIndex(
-                        "Subscription"
-                    )
-                ]
-            ) -
-            number(
-                a[
-                    columnIndex(
-                        "Subscription"
-                    )
-                ]
-            );
-
-        }
-
-
-        if (
-            sort === "ipoPrice"
-        ) {
-
-            return number(
-                b[
-                    columnIndex(
-                        "IPO Price"
-                    )
-                ]
-            ) -
-            number(
-                a[
-                    columnIndex(
-                        "IPO Price"
-                    )
-                ]
-            );
-
-        }
-
-
-        if (
-            sort === "listingPrice"
-        ) {
-
-            return number(
-                b[
-                    columnIndex(
-                        "Estimated Listing Price"
-                    )
-                ]
-            ) -
-            number(
-                a[
-                    columnIndex(
-                        "Estimated Listing Price"
-                    )
-                ]
-            );
-
-        }
-
-
-        // DEFAULT:
-        // latest updated first
-
-        return 0;
-
-    });
-
-
-    renderTable([
-        originalHeader,
-        ...rows
-    ]);
-
-}
-
-
-// ============================================================
-// MANUAL SORT
-// ============================================================
-
-function sortBy(column) {
-
-    const select =
-        document.getElementById(
-            "sortSelect"
+    if (!response.ok) {
+
+        throw new Error(
+            "Current CSV HTTP " +
+            response.status
         );
 
-
-    if (
-        column === "IPO Name"
-    ) {
-
-        select.value = "name";
-
-    }
-
-    else if (
-        column === "GMP"
-    ) {
-
-        select.value = "gmp";
-
-    }
-
-    else if (
-        column === "GMP %"
-    ) {
-
-        select.value = "gmpPercent";
-
-    }
-
-    else if (
-        column === "Updated"
-    ) {
-
-        select.value = "updated";
-
     }
 
 
-    applyFilters();
+    const text =
+        await response.text();
+
+
+    ipoData =
+        csvToObjects(text);
+
+
+    console.log(
+        "Current IPO rows:",
+        ipoData.length
+    );
 
 }
 
 
-// ============================================================
-// LOAD CSV
-// ============================================================
+/* =========================================================
+   LOAD HISTORY CSV
+========================================================= */
 
-async function loadCSV() {
-
-    const status =
-        document.getElementById(
-            "status"
-        );
-
-
-    status.innerText =
-        "Loading latest GMP data...";
-
+async function loadHistoryCSV() {
 
     try {
 
         const response =
             await fetch(
-                csvURL()
+                HISTORY_CSV +
+                "?t=" +
+                Date.now()
             );
 
 
-        if (
-            !response.ok
-        ) {
+        if (!response.ok) {
 
-            throw new Error(
-                "CSV file not found"
+            console.log(
+                "History CSV not available yet."
             );
+
+            historyData = [];
+
+            return;
 
         }
 
@@ -1818,298 +946,1025 @@ async function loadCSV() {
             await response.text();
 
 
-        allData =
-            parseCSV(text);
+        historyData =
+            csvToObjects(text);
 
 
-        if (
-            allData.length < 2
-        ) {
+        console.log(
+            "History rows:",
+            historyData.length
+        );
 
-            throw new Error(
-                "CSV contains no data"
-            );
+    }
 
-        }
+    catch (error) {
 
+        console.log(
+            "No history CSV:",
+            error.message
+        );
 
-        headers =
-            allData[0].map(
-                h => h.trim()
-            );
+        historyData = [];
 
+    }
 
-        // ----------------------------------------------------
-        // SORT DATA BY UPDATED FIRST
-        // ----------------------------------------------------
-
-        const updatedIndex =
-            columnIndex(
-                "Updated"
-            );
+}
 
 
-        if (
-            updatedIndex >= 0
-        ) {
+/* =========================================================
+   BUILD IPO DROPDOWN
+========================================================= */
 
-            const rows =
-                allData.slice(1);
+function buildIPOList() {
 
-
-            rows.sort(
-                (a, b) => {
-
-                    const da =
-                        parseUpdatedDate(
-                            a[
-                                updatedIndex
-                            ]
-                        );
-
-
-                    const db =
-                        parseUpdatedDate(
-                            b[
-                                updatedIndex
-                            ]
-                        );
-
-
-                    return db - da;
-
-                }
-            );
-
-
-            allData = [
-                allData[0],
-                ...rows
-            ];
-
-        }
-
-
-        updateStats(
-            allData
+    const select =
+        document.getElementById(
+            "ipoSelect"
         );
 
 
-        applyFilters();
+    select.innerHTML =
+        '<option value="">Select IPO</option>';
 
 
-        status.innerText =
-            "Showing " +
-            (
-                allData.length - 1
-            ) +
-            " IPOs";
+    const names = [];
+
+
+    ipoData.forEach(row => {
+
+        const name =
+            getIPOName(row);
+
+
+        if (
+            name &&
+            !names.includes(name)
+        ) {
+
+            names.push(name);
+
+        }
+
+    });
+
+
+    names.sort(
+        (a, b) =>
+            a.localeCompare(b)
+    );
+
+
+    names.forEach(name => {
+
+        const option =
+            document.createElement(
+                "option"
+            );
+
+
+        option.value =
+            name;
+
+
+        option.textContent =
+            name;
+
+
+        select.appendChild(
+            option
+        );
+
+    });
+
+}
+
+
+/* =========================================================
+   FIND HISTORY FOR IPO
+========================================================= */
+
+function getHistoryForIPO(
+    ipoName
+) {
+
+    const rows =
+        historyData.filter(
+            row =>
+                getIPOName(row)
+                .toLowerCase()
+                ===
+                ipoName
+                .toLowerCase()
+        );
+
+
+    const result = [];
+
+
+    rows.forEach(row => {
+
+        const dateValue =
+            getValue(
+                row,
+                [
+                    "Date",
+                    "Updated",
+                    "Updated On",
+                    "Timestamp",
+                    "Date Time"
+                ]
+            );
+
+
+        const date =
+            parseDate(
+                dateValue
+            );
+
+
+        let gmpPercent =
+            getNumber(
+                getValue(
+                    row,
+                    [
+                        "GMP %",
+                        "GMP % (Website)",
+                        "Calculated GMP %",
+                        "GMP Percent"
+                    ]
+                )
+            );
+
+
+        /*
+           If GMP % is not stored,
+           calculate it from GMP / IPO price.
+        */
+
+        if (
+            gmpPercent === null
+        ) {
+
+            const gmp =
+                getNumber(
+                    getValue(
+                        row,
+                        [
+                            "GMP",
+                            "GMP Numeric"
+                        ]
+                    )
+                );
+
+
+            const price =
+                getNumber(
+                    getValue(
+                        row,
+                        [
+                            "IPO Price",
+                            "Price",
+                            "Upper Price"
+                        ]
+                    )
+                );
+
+
+            if (
+                gmp !== null &&
+                price !== null &&
+                price !== 0
+            ) {
+
+                gmpPercent =
+                    (
+                        gmp /
+                        price
+                    ) * 100;
+
+            }
+
+        }
+
+
+        if (
+            date &&
+            gmpPercent !== null
+        ) {
+
+            result.push({
+
+                date: date,
+
+                gmpPercent:
+                    Number(
+                        gmpPercent.toFixed(2)
+                    )
+
+            });
+
+        }
+
+    });
+
+
+    result.sort(
+        (a, b) =>
+            a.date - b.date
+    );
+
+
+    return result;
+
+}
+
+
+/* =========================================================
+   CREATE CHART
+========================================================= */
+
+function updateChart(
+    ipoName
+) {
+
+    selectedIPO =
+        ipoName;
+
+
+    let history =
+        getHistoryForIPO(
+            ipoName
+        );
+
+
+    /*
+       If no historical CSV exists,
+       use current IPO row.
+    */
+
+    if (
+        history.length === 0
+    ) {
+
+        const row =
+            ipoData.find(
+                r =>
+                    getIPOName(r)
+                    .toLowerCase()
+                    ===
+                    ipoName
+                    .toLowerCase()
+            );
+
+
+        if (row) {
+
+            const gmp =
+                getNumber(
+                    getValue(
+                        row,
+                        [
+                            "GMP"
+                        ]
+                    )
+                );
+
+
+            let gmpPercent =
+                getNumber(
+                    getValue(
+                        row,
+                        [
+                            "GMP %",
+                            "GMP % (Website)",
+                            "Calculated GMP %"
+                        ]
+                    )
+                );
+
+
+            const price =
+                getNumber(
+                    getValue(
+                        row,
+                        [
+                            "IPO Price",
+                            "Price"
+                        ]
+                    )
+                );
+
+
+            /*
+               Calculate GMP %
+               if missing.
+            */
+
+            if (
+                gmpPercent === null &&
+                gmp !== null &&
+                price !== null &&
+                price !== 0
+            ) {
+
+                gmpPercent =
+                    (
+                        gmp /
+                        price
+                    ) * 100;
+
+            }
+
+
+            const updated =
+                getValue(
+                    row,
+                    [
+                        "Updated",
+                        "UPDATED-ON",
+                        "Date"
+                    ]
+                );
+
+
+            const date =
+                parseDate(
+                    updated
+                );
+
+
+            if (
+                gmpPercent !== null
+            ) {
+
+                history = [{
+
+                    date:
+                        date ||
+                        new Date(),
+
+                    gmpPercent:
+                        Number(
+                            gmpPercent.toFixed(2)
+                        )
+
+                }];
+
+            }
+
+        }
+
+    }
+
+
+    const canvas =
+        document.getElementById(
+            "gmpChart"
+        );
+
+
+    const ctx =
+        canvas.getContext(
+            "2d"
+        );
+
+
+    if (gmpChart) {
+
+        gmpChart.destroy();
+
+    }
+
+
+    document.getElementById(
+        "chartTitle"
+    ).innerText =
+        ipoName +
+        " — GMP % Trend";
+
+
+    if (
+        history.length === 0
+    ) {
+
+        return;
+
+    }
+
+
+    gmpChart =
+        new Chart(
+            ctx,
+            {
+
+                type: "line",
+
+                data: {
+
+                    labels:
+                        history.map(
+                            item =>
+                                formatDate(
+                                    item.date
+                                )
+                        ),
+
+                    datasets: [{
+
+                        label:
+                            "GMP %",
+
+                        data:
+                            history.map(
+                                item =>
+                                    item.gmpPercent
+                            ),
+
+                        tension:
+                            0.25,
+
+                        borderWidth:
+                            2,
+
+                        pointRadius:
+                            5,
+
+                        pointHoverRadius:
+                            8,
+
+                        fill:
+                            false
+
+                    }]
+
+                },
+
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    interaction: {
+
+                        mode:
+                            "index",
+
+                        intersect:
+                            false
+
+                    },
+
+
+                    plugins: {
+
+                        legend: {
+
+                            display:
+                                true
+
+                        },
+
+
+                        tooltip: {
+
+                            callbacks: {
+
+                                label:
+                                    function(context) {
+
+                                        return (
+                                            " GMP: " +
+                                            context.parsed.y +
+                                            "%"
+                                        );
+
+                                    }
+
+                            }
+
+                        }
+
+                    },
+
+
+                    scales: {
+
+                        x: {
+
+                            title: {
+
+                                display:
+                                    true,
+
+                                text:
+                                    "Date"
+
+                            }
+
+                        },
+
+
+                        y: {
+
+                            beginAtZero:
+                                true,
+
+                            title: {
+
+                                display:
+                                    true,
+
+                                text:
+                                    "GMP %"
+
+                            },
+
+
+                            ticks: {
+
+                                callback:
+                                    function(value) {
+
+                                        return (
+                                            value +
+                                            "%"
+                                        );
+
+                                    }
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* =========================================================
+   RENDER TABLE
+========================================================= */
+
+function renderTable(
+    data
+) {
+
+    const tbody =
+        document.getElementById(
+            "ipoTableBody"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    data.forEach(row => {
+
+        const tr =
+            document.createElement(
+                "tr"
+            );
+
+
+        const name =
+            getIPOName(row);
+
+
+        const gmp =
+            getValue(
+                row,
+                ["GMP"]
+            );
+
+
+        const gmpPercent =
+            getValue(
+                row,
+                [
+                    "GMP %",
+                    "GMP % (Website)",
+                    "Calculated GMP %"
+                ]
+            );
+
+
+        const gmpDown =
+            getValue(
+                row,
+                ["GMP Down"]
+            );
+
+
+        const gmpUp =
+            getValue(
+                row,
+                ["GMP Up"]
+            );
+
+
+        const subscription =
+            getValue(
+                row,
+                ["Subscription"]
+            );
+
+
+        const price =
+            getValue(
+                row,
+                [
+                    "IPO Price",
+                    "Price"
+                ]
+            );
+
+
+        const size =
+            getValue(
+                row,
+                ["IPO Size"]
+            );
+
+
+        const lot =
+            getValue(
+                row,
+                [
+                    "Lot Size",
+                    "LOT"
+                ]
+            );
+
+
+        const open =
+            getValue(
+                row,
+                ["Open"]
+            );
+
+
+        const close =
+            getValue(
+                row,
+                ["Close"]
+            );
+
+
+        const boa =
+            getValue(
+                row,
+                [
+                    "BOA Date",
+                    "BOA DT"
+                ]
+            );
+
+
+        const listing =
+            getValue(
+                row,
+                [
+                    "Listing Date",
+                    "LISTING"
+                ]
+            );
+
+
+        const updated =
+            getValue(
+                row,
+                [
+                    "Updated",
+                    "UPDATED-ON"
+                ]
+            );
+
+
+        const anchor =
+            getValue(
+                row,
+                ["Anchor"]
+            );
+
+
+        const estimated =
+            getValue(
+                row,
+                [
+                    "Estimated Listing Price"
+                ]
+            );
+
+
+        tr.innerHTML = `
+
+            <td class="ipo-name">
+                ${escapeHTML(name)}
+            </td>
+
+            <td class="gmp-positive">
+                ${escapeHTML(gmp)}
+            </td>
+
+            <td class="gmp-positive">
+                ${escapeHTML(gmpPercent)}
+            </td>
+
+            <td>
+                ${escapeHTML(gmpDown)}
+            </td>
+
+            <td>
+                ${escapeHTML(gmpUp)}
+            </td>
+
+            <td>
+                ${escapeHTML(subscription)}
+            </td>
+
+            <td>
+                ${escapeHTML(price)}
+            </td>
+
+            <td>
+                ${escapeHTML(size)}
+            </td>
+
+            <td>
+                ${escapeHTML(lot)}
+            </td>
+
+            <td>
+                ${escapeHTML(open)}
+            </td>
+
+            <td>
+                ${escapeHTML(close)}
+            </td>
+
+            <td>
+                ${escapeHTML(boa)}
+            </td>
+
+            <td>
+                ${escapeHTML(listing)}
+            </td>
+
+            <td>
+                ${escapeHTML(updated)}
+            </td>
+
+            <td>
+                ${escapeHTML(anchor)}
+            </td>
+
+            <td>
+                ${escapeHTML(estimated)}
+            </td>
+
+        `;
+
+
+        /*
+           Clicking a row selects IPO
+        */
+
+        tr.addEventListener(
+            "click",
+            function() {
+
+                document.getElementById(
+                    "ipoSelect"
+                ).value =
+                    name;
+
+
+                updateChart(
+                    name
+                );
+
+
+                window.scrollTo({
+
+                    top: 0,
+
+                    behavior:
+                        "smooth"
+
+                });
+
+            }
+        );
+
+
+        tbody.appendChild(
+            tr
+        );
+
+    });
+
+}
+
+
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
+
+function escapeHTML(value) {
+
+    return String(
+        value || ""
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /'/g,
+        "&#039;"
+    );
+
+}
+
+
+/* =========================================================
+   IPO SELECTOR
+========================================================= */
+
+document
+    .getElementById(
+        "ipoSelect"
+    )
+    .addEventListener(
+        "change",
+        function() {
+
+            if (
+                this.value
+            ) {
+
+                updateChart(
+                    this.value
+                );
+
+            }
+
+        }
+    );
+
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+document
+    .getElementById(
+        "searchBox"
+    )
+    .addEventListener(
+        "input",
+        function() {
+
+            const search =
+                this.value
+                .toLowerCase()
+                .trim();
+
+
+            const filtered =
+                ipoData.filter(
+                    row =>
+                        getIPOName(row)
+                        .toLowerCase()
+                        .includes(
+                            search
+                        )
+                );
+
+
+            renderTable(
+                filtered
+            );
+
+        }
+    );
+
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+async function initialize() {
+
+    try {
+
+        document.getElementById(
+            "status"
+        ).innerText =
+            "Loading IPO GMP data...";
+
+
+        await loadCurrentCSV();
+
+
+        await loadHistoryCSV();
+
+
+        buildIPOList();
+
+
+        renderTable(
+            ipoData
+        );
+
+
+        /*
+           Select first IPO
+        */
+
+        if (
+            ipoData.length > 0
+        ) {
+
+            const firstIPO =
+                getIPOName(
+                    ipoData[0]
+                );
+
+
+            selectedIPO =
+                firstIPO;
+
+
+            document.getElementById(
+                "ipoSelect"
+            ).value =
+                firstIPO;
+
+
+            updateChart(
+                firstIPO
+            );
+
+        }
 
 
         document.getElementById(
-            "refreshTime"
+            "status"
         ).innerText =
-            new Date()
-                .toLocaleString(
-                    "en-IN"
-                );
+            "✅ Loaded " +
+            ipoData.length +
+            " IPO records successfully.";
 
 
     }
 
-    catch(error) {
+    catch (error) {
 
         console.error(error);
 
 
-        status.innerText =
-            "❌ " +
+        document.getElementById(
+            "status"
+        ).innerText =
+            "❌ Error loading GMP data: " +
             error.message;
 
-
-        document.getElementById(
-            "tableBody"
-        ).innerHTML = `
-
-            <tr>
-
-                <td
-                    colspan="17"
-                    class="loading">
-
-                    Unable to load IPO GMP data.
-
-                </td>
-
-            </tr>
-
-        `;
-
     }
 
 }
 
 
-// ============================================================
-// PARSE UPDATED DATE
-// ============================================================
+/* =========================================================
+   START
+========================================================= */
 
-function parseUpdatedDate(value) {
-
-    if (
-        !value
-    ) {
-
-        return 0;
-
-    }
-
-
-    const match =
-        String(value)
-            .trim()
-            .match(
-                /(\d{1,2})-([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/
-            );
-
-
-    if (!match) {
-
-        return 0;
-
-    }
-
-
-    const day =
-        parseInt(
-            match[1]
-        );
-
-
-    const monthNames = [
-
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec"
-
-    ];
-
-
-    const month =
-        monthNames.indexOf(
-            match[2]
-        );
-
-
-    const hour =
-        parseInt(
-            match[3]
-        );
-
-
-    const minute =
-        parseInt(
-            match[4]
-        );
-
-
-    const now =
-        new Date();
-
-
-    let year =
-        now.getFullYear();
-
-
-    let date =
-        new Date(
-            year,
-            month,
-            day,
-            hour,
-            minute
-        );
-
-
-    // Handle year boundary
-
-    if (
-        date > now
-    ) {
-
-        date.setFullYear(
-            year - 1
-        );
-
-    }
-
-
-    return date.getTime();
-
-}
-
-
-// ============================================================
-// EVENTS
-// ============================================================
-
-document
-    .getElementById(
-        "search"
-    )
-    .addEventListener(
-        "input",
-        applyFilters
-    );
-
-
-document
-    .getElementById(
-        "gmpFilter"
-    )
-    .addEventListener(
-        "change",
-        applyFilters
-    );
-
-
-document
-    .getElementById(
-        "sortSelect"
-    )
-    .addEventListener(
-        "change",
-        applyFilters
-    );
-
-
-// ============================================================
-// INITIAL LOAD
-// ============================================================
-
-loadCSV();
-
-
-// ============================================================
-// AUTO REFRESH
-// ============================================================
-
-setInterval(
-    loadCSV,
-    5 * 60 * 1000
-);
+initialize();
 
 
 </script>
 
 </body>
+
 </html>
