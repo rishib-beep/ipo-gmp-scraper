@@ -1,131 +1,569 @@
+```yaml
+# ============================================================
+# IPO GMP SCRAPER - GITHUB ACTIONS
+# ============================================================
+#
+# Schedule:
+#   Start : 09:15 AM IST
+#   End   : 03:30 PM IST
+#   Interval: Every 30 minutes
+#   Days: Monday-Friday
+#
+# GitHub cron uses UTC.
+# IST = UTC + 5:30
+#
+# ============================================================
 
 name: IPO GMP Scraper
 
+
+# ============================================================
+# WORKFLOW TRIGGERS
+# ============================================================
+
 on:
+
+  # ----------------------------------------------------------
+  # Manual execution
+  # ----------------------------------------------------------
+
   workflow_dispatch:
 
+
+  # ----------------------------------------------------------
+  # Scheduled execution
+  #
+  # All times below are UTC.
+  # Converted to IST in comments.
+  # ----------------------------------------------------------
+
   schedule:
-    - cron: "*/30 * * * *"
+
+    # --------------------------------------------------------
+    # 09:15 AM IST
+    # 03:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 3 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 09:45 AM IST
+    # 04:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 4 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 10:15 AM IST
+    # 04:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 4 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 10:45 AM IST
+    # 05:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 5 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 11:15 AM IST
+    # 05:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 5 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 11:45 AM IST
+    # 06:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 6 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 12:15 PM IST
+    # 06:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 6 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 12:45 PM IST
+    # 07:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 7 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 01:15 PM IST
+    # 07:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 7 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 01:45 PM IST
+    # 08:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 8 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 02:15 PM IST
+    # 08:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 8 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 02:45 PM IST
+    # 09:15 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "15 9 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 03:15 PM IST
+    # 09:45 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "45 9 * * 1-5"
+
+
+    # --------------------------------------------------------
+    # 03:30 PM IST - FINAL RUN
+    # 10:00 AM UTC
+    # --------------------------------------------------------
+
+    - cron: "0 10 * * 1-5"
+
+
+# ============================================================
+# PERMISSIONS
+# ============================================================
 
 permissions:
   contents: write
 
+
+# ============================================================
+# CONCURRENCY
+#
+# Prevent two scraper runs from modifying the CSV files
+# simultaneously.
+# ============================================================
+
+concurrency:
+
+  group: ipo-gmp-scraper
+
+  cancel-in-progress: false
+
+
+# ============================================================
+# JOB
+# ============================================================
+
 jobs:
+
   scrape:
+
     runs-on: ubuntu-latest
 
+
     steps:
+
+      # ======================================================
+      # CHECKOUT REPOSITORY
+      # ======================================================
+
       - name: Checkout repository
+
         uses: actions/checkout@v5
+
         with:
+
           fetch-depth: 0
+
           persist-credentials: true
 
+
+      # ======================================================
+      # SETUP PYTHON
+      # ======================================================
+
       - name: Setup Python
+
         uses: actions/setup-python@v6
+
         with:
+
           python-version: "3.12"
+
           cache: "pip"
 
+
+      # ======================================================
+      # INSTALL DEPENDENCIES
+      # ======================================================
+
       - name: Install dependencies
+
         run: |
+
           python -m pip install --upgrade pip
+
           pip install -r requirements.txt
+
           python -m playwright install --with-deps chromium
 
+
+      # ======================================================
+      # RUN IPO GMP SCRAPER
+      # ======================================================
+
       - name: Run IPO GMP scraper
+
         env:
+
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+
         run: |
-          echo "Starting IPO GMP scraper..."
+
+          echo "=========================================="
+
+          echo "STARTING IPO GMP SCRAPER"
+
+          echo "=========================================="
+
+          echo ""
+
+          echo "Python version:"
+
+          python --version
+
+          echo ""
+
+          echo "Current UTC time:"
+
+          date -u
+
+          echo ""
+
+          echo "Current IST time:"
+
+          TZ=Asia/Kolkata date
+
+          echo ""
+
+          echo "Starting scraper..."
+
           python ipo_gmp_scraper.py
-          echo "Scraper completed."
+
+          echo ""
+
+          echo "Scraper completed successfully."
+
+
+      # ======================================================
+      # VERIFY RESULT CSV
+      # ======================================================
 
       - name: Verify result CSV
+
         run: |
+
+          echo "=========================================="
+
+          echo "VERIFYING RESULT CSV"
+
+          echo "=========================================="
+
+          echo ""
+
           if [ ! -f "ipo_gmp_result.csv" ]; then
+
             echo "ERROR: ipo_gmp_result.csv not found"
+
             exit 1
+
           fi
 
-          echo "ipo_gmp_result.csv exists"
+          if [ ! -s "ipo_gmp_result.csv" ]; then
+
+            echo "ERROR: ipo_gmp_result.csv is empty"
+
+            exit 1
+
+          fi
+
+          echo "Result CSV exists."
+
+          echo ""
+
           ls -lh ipo_gmp_result.csv
+
+          echo ""
+
+          echo "Number of lines:"
+
           wc -l ipo_gmp_result.csv
+
+          echo ""
+
           echo "First 10 lines:"
+
           head -10 ipo_gmp_result.csv
 
+
+      # ======================================================
+      # VERIFY HISTORY CSV
+      # ======================================================
+
       - name: Verify history CSV
+
         run: |
-          if [ ! -f "ipo_gmp_history.csv" ]; then
-            echo "ERROR: ipo_gmp_history.csv not found"
-            exit 1
-          fi
 
-          echo "ipo_gmp_history.csv exists"
-          ls -lh ipo_gmp_history.csv
-          wc -l ipo_gmp_history.csv
-          echo "First 10 lines:"
-          head -10 ipo_gmp_history.csv
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Stage CSV files
-        run: |
-          git add ipo_gmp_result.csv
-          git add ipo_gmp_history.csv
-
-          echo "Staged files:"
-          git diff --cached --name-only
-
-      - name: Check for changes
-        id: changes
-        run: |
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No CSV changes detected."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "CSV changes detected."
-          fi
-
-      - name: Commit CSV files
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          git commit -m "Update IPO GMP data"
-
-      - name: Synchronize with main
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          git fetch origin main
-          git rebase origin/main
-
-      - name: Push changes
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          git push origin HEAD:main
-
-      - name: Final verification
-        run: |
           echo "=========================================="
-          echo "FINAL VERIFICATION"
+
+          echo "VERIFYING HISTORY CSV"
+
           echo "=========================================="
 
           echo ""
+
+          if [ ! -f "ipo_gmp_history.csv" ]; then
+
+            echo "ERROR: ipo_gmp_history.csv not found"
+
+            exit 1
+
+          fi
+
+          if [ ! -s "ipo_gmp_history.csv" ]; then
+
+            echo "ERROR: ipo_gmp_history.csv is empty"
+
+            exit 1
+
+          fi
+
+          echo "History CSV exists."
+
+          echo ""
+
+          ls -lh ipo_gmp_history.csv
+
+          echo ""
+
+          echo "Number of lines:"
+
+          wc -l ipo_gmp_history.csv
+
+          echo ""
+
+          echo "First 10 lines:"
+
+          head -10 ipo_gmp_history.csv
+
+
+      # ======================================================
+      # GIT STATUS
+      # ======================================================
+
+      - name: Check Git status
+
+        run: |
+
+          echo "=========================================="
+
+          echo "GIT STATUS"
+
+          echo "=========================================="
+
+          echo ""
+
+          git status --short
+
+
+      # ======================================================
+      # CONFIGURE GIT
+      # ======================================================
+
+      - name: Configure Git
+
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+      # ======================================================
+      # STAGE CSV FILES
+      # ======================================================
+
+      - name: Stage CSV files
+
+        run: |
+
+          git add ipo_gmp_result.csv
+
+          git add ipo_gmp_history.csv
+
+          echo "=========================================="
+
+          echo "STAGED FILES"
+
+          echo "=========================================="
+
+          echo ""
+
+          git diff --cached --name-only
+
+
+      # ======================================================
+      # CHECK FOR CHANGES
+      # ======================================================
+
+      - name: Check for changes
+
+        id: changes
+
+        run: |
+
+          if git diff --cached --quiet; then
+
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+
+            echo ""
+
+            echo "No CSV changes detected."
+
+          else
+
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+
+            echo ""
+
+            echo "CSV changes detected."
+
+            echo ""
+
+            git diff --cached --stat
+
+          fi
+
+
+      # ======================================================
+      # COMMIT CSV FILES
+      # ======================================================
+
+      - name: Commit CSV files
+
+        if: steps.changes.outputs.changed == 'true'
+
+        run: |
+
+          git commit -m "Update IPO GMP data"
+
+
+      # ======================================================
+      # SYNCHRONIZE WITH MAIN
+      # ======================================================
+
+      - name: Synchronize with main
+
+        if: steps.changes.outputs.changed == 'true'
+
+        run: |
+
+          echo "Fetching latest main branch..."
+
+          git fetch origin main
+
+          echo ""
+
+          echo "Rebasing local changes..."
+
+          git rebase origin/main
+
+
+      # ======================================================
+      # PUSH CHANGES
+      # ======================================================
+
+      - name: Push changes
+
+        if: steps.changes.outputs.changed == 'true'
+
+        run: |
+
+          echo "Pushing CSV updates to main..."
+
+          git push origin HEAD:main
+
+
+      # ======================================================
+      # FINAL VERIFICATION
+      # ======================================================
+
+      - name: Final verification
+
+        run: |
+
+          echo ""
+
+          echo "=========================================="
+
+          echo "FINAL VERIFICATION"
+
+          echo "=========================================="
+
+          echo ""
+
+          echo "Current IST time:"
+
+          TZ=Asia/Kolkata date
+
+          echo ""
+
           echo "Result CSV:"
+
           ls -lh ipo_gmp_result.csv
 
           echo ""
+
           echo "History CSV:"
+
           ls -lh ipo_gmp_history.csv
 
           echo ""
+
           echo "Latest commit:"
+
           git log -1 --oneline
 
           echo ""
-          echo "IPO GMP scraper completed successfully."
 
+          echo "=========================================="
+
+          echo "IPO GMP SCRAPER COMPLETED SUCCESSFULLY"
+
+          echo "=========================================="
+```
