@@ -1,6 +1,10 @@
+```python
 # ============================================================
 # IPO GMP SCRAPER
 # ============================================================
+#
+# Source:
+# https://www.ipowatch.info/
 #
 # Creates:
 #   1. ipo_gmp_result.csv
@@ -9,19 +13,10 @@
 # Designed for:
 #   GitHub Actions
 #   30-minute scheduled execution
-#   IPO GMP Dashboard
 #
-# Source:
-#   https://www.ipowatch.info/
-#
-# IMPORTANT:
-#   This file contains ONLY Python.
-#   Do not put HTML/CSS/JavaScript in this file.
 # ============================================================
 
-import os
 import re
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -47,28 +42,35 @@ INDIA_TIMEZONE = "Asia/Kolkata"
 # ============================================================
 
 def clean_text(value):
-    """Clean spaces and unwanted characters."""
-
     if value is None:
         return ""
 
     value = str(value)
 
     value = value.replace("\xa0", " ")
+
     value = re.sub(r"\s+", " ", value)
 
     return value.strip()
 
 
 def numeric_value(value):
-    """Extract first numeric value from text."""
+    """
+    Extract first numeric value.
+
+    Examples:
+        ₹125       -> 125
+        125        -> 125
+        +125       -> 125
+        -125       -> -125
+        ₹1,250     -> 1250
+    """
 
     if value is None:
         return 0.0
 
     text = clean_text(value)
 
-    # Remove commas
     text = text.replace(",", "")
 
     match = re.search(
@@ -81,22 +83,76 @@ def numeric_value(value):
 
     try:
         return float(match.group())
-
     except Exception:
         return 0.0
 
 
 def percentage_value(value):
     """
-    Extract percentage number.
+    Extract percentage.
 
-    Supports both:
-        25%
-        25.5%
+    Example:
+        25% -> 25
+    """
 
-    and values without %:
-        25
-        25.5
+    if value is None:
+        return 0.0
+
+    text = clean_text(value)
+
+    match = re.search(
+        r"-?\d+(?:\.\d+)?\s*%",
+        text
+    )
+
+    if not match:
+        return 0.0
+
+    try:
+        return float(
+            re.search(
+                r"-?\d+(?:\.\d+)?",
+                match.group()
+            ).group()
+        )
+    except Exception:
+        return 0.0
+
+
+def find_column(columns, keywords):
+    """
+    Find a column by keyword.
+
+    Matching is case-insensitive.
+    """
+
+    for column in columns:
+
+        column_text = clean_text(
+            column
+        ).lower()
+
+        for keyword in keywords:
+
+            if keyword.lower() in column_text:
+
+                return column
+
+    return None
+
+
+def parse_price_range(value):
+    """
+    Extract price from issue price.
+
+    Examples:
+
+        100-110       -> 110
+        ₹100 - ₹110   -> 110
+        110           -> 110
+
+    For IPO GMP percentage calculation,
+    the upper issue price is normally appropriate.
     """
 
     if value is None:
@@ -106,171 +162,25 @@ def percentage_value(value):
 
     text = text.replace(",", "")
 
-    # --------------------------------------------------------
-    # First look for explicit percentage
-    # --------------------------------------------------------
-
-    match = re.search(
-        r"-?\d+(?:\.\d+)?\s*%",
+    numbers = re.findall(
+        r"\d+(?:\.\d+)?",
         text
     )
 
-    if match:
-
-        number_match = re.search(
-            r"-?\d+(?:\.\d+)?",
-            match.group()
-        )
-
-        if number_match:
-
-            try:
-                return float(
-                    number_match.group()
-                )
-
-            except Exception:
-                return 0.0
-
-    # --------------------------------------------------------
-    # If no % symbol exists, extract numeric value
-    # --------------------------------------------------------
-
-    match = re.search(
-        r"-?\d+(?:\.\d+)?",
-        text
-    )
-
-    if not match:
+    if not numbers:
         return 0.0
 
     try:
-        return float(
-            match.group()
-        )
-
+        return float(numbers[-1])
     except Exception:
         return 0.0
-
-
-def normalize_name(name):
-    """Normalize IPO name for history matching."""
-
-    name = clean_text(name)
-
-    name = re.sub(
-        r"\bIPO\b",
-        "",
-        name,
-        flags=re.IGNORECASE
-    )
-
-    name = re.sub(
-        r"\bSME\b",
-        "",
-        name,
-        flags=re.IGNORECASE
-    )
-
-    name = re.sub(
-        r"\s+",
-        " ",
-        name
-    )
-
-    return name.strip()
-
-
-def parse_date(value):
-    """Try to convert different date formats."""
-
-    if not value:
-        return pd.NaT
-
-    value = clean_text(value)
-
-    formats = [
-        "%d-%b-%Y",
-        "%d-%B-%Y",
-        "%d %b %Y",
-        "%d %B %Y",
-        "%d/%m/%Y",
-        "%d-%m-%Y",
-        "%Y-%m-%d",
-    ]
-
-    for fmt in formats:
-
-        try:
-
-            return pd.to_datetime(
-                value,
-                format=fmt
-            )
-
-        except Exception:
-            pass
-
-    try:
-
-        return pd.to_datetime(
-            value,
-            dayfirst=True,
-            errors="coerce"
-        )
-
-    except Exception:
-
-        return pd.NaT
-
-
-def extract_date_from_text(text):
-    """Find a date inside a text field."""
-
-    if not text:
-        return pd.NaT
-
-    text = clean_text(text)
-
-    patterns = [
-        r"\d{1,2}-[A-Za-z]{3}-\d{4}",
-        r"\d{1,2}-[A-Za-z]+-\d{4}",
-        r"\d{1,2}\s+[A-Za-z]{3}\s+\d{4}",
-        r"\d{1,2}\s+[A-Za-z]+\s+\d{4}",
-    ]
-
-    for pattern in patterns:
-
-        match = re.search(
-            pattern,
-            text,
-            flags=re.IGNORECASE
-        )
-
-        if match:
-
-            result = parse_date(
-                match.group()
-            )
-
-            if not pd.isna(result):
-
-                return result
-
-    return pd.NaT
 
 
 # ============================================================
-# GET TABLE FROM WEBSITE
+# FIND GMP TABLE
 # ============================================================
 
 def get_gmp_table(page):
-    """
-    Find the IPO GMP table.
-
-    The website can change table structure, therefore
-    multiple keywords are used for scoring.
-    """
 
     tables = page.locator("table")
 
@@ -283,10 +193,11 @@ def get_gmp_table(page):
     if count == 0:
 
         raise RuntimeError(
-            "No tables found on IPOWatch page."
+            "No HTML tables found on the page."
         )
 
     best_table = None
+
     best_score = -1
 
     for i in range(count):
@@ -305,12 +216,10 @@ def get_gmp_table(page):
                 "gmp",
                 "ipo",
                 "company",
-                "issue",
                 "listing",
                 "current",
                 "return",
-                "price",
-                "updated",
+                "issue",
             ]
 
             for keyword in keywords:
@@ -319,19 +228,26 @@ def get_gmp_table(page):
 
                     score += 1
 
+            print(
+                f"Table {i + 1} score: {score}"
+            )
+
             if score > best_score:
 
                 best_score = score
+
                 best_table = table
 
-        except Exception:
+        except Exception as error:
 
-            continue
+            print(
+                f"Could not inspect table {i + 1}: {error}"
+            )
 
     if best_table is None:
 
         raise RuntimeError(
-            "Correct GMP table not found."
+            "Correct IPO GMP table not found."
         )
 
     print(
@@ -361,10 +277,6 @@ def extract_table_data(table):
             "GMP table contains no data rows."
         )
 
-    # ========================================================
-    # HEADERS
-    # ========================================================
-
     headers = []
 
     first_row = rows.nth(0)
@@ -379,9 +291,7 @@ def extract_table_data(table):
 
         headers.append(
             clean_text(
-                header_cells
-                .nth(i)
-                .inner_text()
+                header_cells.nth(i).inner_text()
             )
         )
 
@@ -389,11 +299,9 @@ def extract_table_data(table):
         "Detected headers:"
     )
 
-    print(headers)
-
-    # ========================================================
-    # DATA
-    # ========================================================
+    print(
+        headers
+    )
 
     data = []
 
@@ -422,9 +330,7 @@ def extract_table_data(table):
 
             values.append(
                 clean_text(
-                    cells
-                    .nth(c)
-                    .inner_text()
+                    cells.nth(c).inner_text()
                 )
             )
 
@@ -432,22 +338,17 @@ def extract_table_data(table):
 
             continue
 
-        # ----------------------------------------------------
-        # Make header/value lengths equal
-        # ----------------------------------------------------
-
         if len(values) < len(headers):
 
             values.extend(
                 [""] *
                 (
                     len(headers)
-                    -
-                    len(values)
+                    - len(values)
                 )
             )
 
-        if len(values) > len(headers):
+        elif len(values) > len(headers):
 
             values = values[
                 :len(headers)
@@ -468,62 +369,7 @@ def extract_table_data(table):
 
 
 # ============================================================
-# FIND COLUMN
-# ============================================================
-
-def find_column(columns, keywords):
-    """
-    Find a column.
-
-    Exact match is attempted first.
-    Partial match is attempted second.
-    """
-
-    # ========================================================
-    # EXACT MATCH
-    # ========================================================
-
-    for column in columns:
-
-        column_clean = clean_text(
-            column
-        ).lower()
-
-        for keyword in keywords:
-
-            keyword_clean = clean_text(
-                keyword
-            ).lower()
-
-            if column_clean == keyword_clean:
-
-                return column
-
-    # ========================================================
-    # PARTIAL MATCH
-    # ========================================================
-
-    for column in columns:
-
-        column_clean = clean_text(
-            column
-        ).lower()
-
-        for keyword in keywords:
-
-            keyword_clean = clean_text(
-                keyword
-            ).lower()
-
-            if keyword_clean in column_clean:
-
-                return column
-
-    return None
-
-
-# ============================================================
-# NORMALIZE GMP DATA
+# NORMALIZE DATA
 # ============================================================
 
 def normalize_data(raw_data):
@@ -537,32 +383,36 @@ def normalize_data(raw_data):
     )
 
     print(
+        f"Raw records: {len(df)}"
+    )
+
+    print(
         f"Raw columns: {list(df.columns)}"
     )
 
+
     # ========================================================
-    # IPO NAME
+    # COMPANY / IPO
     # ========================================================
 
     ipo_col = find_column(
         df.columns,
         [
-            "ipo",
-            "ipo name",
             "company",
-            "company name",
+            "ipo",
             "name",
         ]
     )
 
+
     # ========================================================
-    # GMP
+    # GMP COLUMN
     #
-    # Old format:
-    #   GMP
+    # Website currently may return:
     #
-    # Current format:
-    #   CURRENT
+    # COMPANY | ISSUE | LISTING | CURRENT | RETURN
+    #
+    # Therefore CURRENT is treated as GMP.
     # ========================================================
 
     gmp_col = find_column(
@@ -571,18 +421,14 @@ def normalize_data(raw_data):
             "gmp",
             "grey market premium",
             "grey market",
+            "premium",
             "current",
         ]
     )
 
+
     # ========================================================
     # GMP %
-    #
-    # Old format:
-    #   GMP %
-    #
-    # Current format:
-    #   RETURN
     # ========================================================
 
     gmp_percent_col = find_column(
@@ -592,45 +438,39 @@ def normalize_data(raw_data):
             "gmp%",
             "gain %",
             "gain%",
-            "premium %",
             "return",
-            "return %",
-            "return%",
+            "premium %",
         ]
     )
 
+
     # ========================================================
-    # IPO PRICE
-    #
-    # Old format:
-    #   PRICE
-    #   ISSUE PRICE
-    #
-    # Current format:
-    #   ISSUE
+    # ISSUE PRICE
     # ========================================================
 
     price_col = find_column(
         df.columns,
         [
             "issue price",
-            "price",
             "issue",
+            "price",
         ]
     )
 
+
     # ========================================================
-    # LISTING
+    # LISTING PRICE
     # ========================================================
 
     listing_col = find_column(
         df.columns,
         [
-            "estimated listing",
-            "est. listing",
             "listing",
+            "est. listing",
+            "estimated listing",
         ]
     )
+
 
     # ========================================================
     # UPDATED
@@ -644,9 +484,6 @@ def normalize_data(raw_data):
         ]
     )
 
-    # ========================================================
-    # DEBUG
-    # ========================================================
 
     print(
         "IPO column:",
@@ -673,13 +510,9 @@ def normalize_data(raw_data):
         listing_col
     )
 
-    print(
-        "Updated column:",
-        updated_col
-    )
 
     # ========================================================
-    # VALIDATION
+    # VALIDATE IPO COLUMN
     # ========================================================
 
     if ipo_col is None:
@@ -688,17 +521,25 @@ def normalize_data(raw_data):
             "IPO/company column not found."
         )
 
+
+    # ========================================================
+    # GMP FALLBACK
+    # ========================================================
+
     if gmp_col is None:
 
         raise RuntimeError(
-            "GMP/CURRENT column not found."
+            "GMP column not found. "
+            "Expected GMP or CURRENT column."
         )
+
 
     # ========================================================
     # CREATE RESULT
     # ========================================================
 
     result = pd.DataFrame()
+
 
     # ========================================================
     # IPO NAME
@@ -710,6 +551,7 @@ def normalize_data(raw_data):
         .map(clean_text)
     )
 
+
     # ========================================================
     # GMP
     # ========================================================
@@ -720,6 +562,7 @@ def normalize_data(raw_data):
         .map(numeric_value)
     )
 
+
     # ========================================================
     # IPO PRICE
     # ========================================================
@@ -729,12 +572,13 @@ def normalize_data(raw_data):
         result["IPO Price"] = (
             df[price_col]
             .astype(str)
-            .map(numeric_value)
+            .map(parse_price_range)
         )
 
     else:
 
         result["IPO Price"] = 0.0
+
 
     # ========================================================
     # GMP %
@@ -752,45 +596,27 @@ def normalize_data(raw_data):
 
         result["GMP %"] = 0.0
 
-    # ========================================================
-    # CALCULATE GMP %
-    #
-    # If RETURN exists, it is used first.
-    #
-    # If RETURN is unavailable or zero:
-    #
-    # GMP % = GMP / IPO Price * 100
-    # ========================================================
+        valid = (
+            result["IPO Price"] > 0
+        )
 
-    valid_price = (
-        result["IPO Price"] > 0
-    )
-
-    zero_percent = (
-        result["GMP %"] == 0
-    )
-
-    calculate_percent = (
-        valid_price &
-        zero_percent
-    )
-
-    result.loc[
-        calculate_percent,
-        "GMP %"
-    ] = (
         result.loc[
-            calculate_percent,
-            "GMP"
-        ]
-        /
-        result.loc[
-            calculate_percent,
-            "IPO Price"
-        ]
-        *
-        100
-    )
+            valid,
+            "GMP %"
+        ] = (
+            result.loc[
+                valid,
+                "GMP"
+            ]
+            /
+            result.loc[
+                valid,
+                "IPO Price"
+            ]
+            *
+            100
+        )
+
 
     # ========================================================
     # ESTIMATED LISTING
@@ -812,6 +638,7 @@ def normalize_data(raw_data):
             result["GMP"]
         )
 
+
     # ========================================================
     # UPDATED
     # ========================================================
@@ -828,85 +655,52 @@ def normalize_data(raw_data):
 
         result["Updated"] = ""
 
-    # ========================================================
-    # IF LISTING VALUE IS ZERO
-    #
-    # Calculate:
-    #
-    # Estimated Listing = IPO Price + GMP
-    # ========================================================
-
-    zero_listing = (
-        result["Estimated Listing"] <= 0
-    )
-
-    valid_listing_calculation = (
-        zero_listing &
-        (result["IPO Price"] > 0)
-    )
-
-    result.loc[
-        valid_listing_calculation,
-        "Estimated Listing"
-    ] = (
-        result.loc[
-            valid_listing_calculation,
-            "IPO Price"
-        ]
-        +
-        result.loc[
-            valid_listing_calculation,
-            "GMP"
-        ]
-    )
 
     # ========================================================
-    # REMOVE EMPTY IPO NAMES
+    # REMOVE EMPTY NAMES
     # ========================================================
 
     result = result[
-        result["IPO Name"]
-        .str.len() > 0
+        result["IPO Name"].str.len() > 0
     ].copy()
 
+
     # ========================================================
-    # REMOVE OBVIOUS TABLE HEADERS
+    # REMOVE HEADER ROWS
     # ========================================================
 
     result = result[
-        ~result["IPO Name"]
-        .str.lower()
+        ~result[
+            "IPO Name"
+        ]
+        .str
+        .lower()
         .isin(
             [
                 "ipo",
                 "company",
-                "company name",
                 "name",
                 "ipo name",
             ]
         )
     ].copy()
 
-    # ========================================================
-    # RESET INDEX
-    # ========================================================
-
-    result = result.reset_index(
-        drop=True
-    )
 
     return result
 
 
 # ============================================================
-# EXTRACT ADDITIONAL IPO INFORMATION
+# ADD DATE COLUMNS
 # ============================================================
 
 def add_ipo_dates(result):
 
     result["Open"] = ""
+
     result["Close"] = ""
+
     result["BOA Date"] = ""
+
     result["Listing Date"] = ""
 
     return result
@@ -924,8 +718,9 @@ def save_result(df):
             "No IPO GMP data extracted."
         )
 
+
     # ========================================================
-    # CLEAN NAMES
+    # CLEAN NAME
     # ========================================================
 
     df["IPO Name"] = (
@@ -933,6 +728,7 @@ def save_result(df):
         .astype(str)
         .map(clean_text)
     )
+
 
     # ========================================================
     # NUMERIC COLUMNS
@@ -954,35 +750,44 @@ def save_result(df):
                 errors="coerce"
             ).fillna(0)
 
+
     # ========================================================
-    # CALCULATE GMP %
+    # GMP %
     # ========================================================
 
     valid = (
-        (df["IPO Price"] > 0)
-        &
-        (df["GMP %"] == 0)
+        df["IPO Price"] > 0
+    )
+
+    zero_percent = (
+        df["GMP %"] == 0
+    )
+
+    calculate_percent = (
+        valid &
+        zero_percent
     )
 
     df.loc[
-        valid,
+        calculate_percent,
         "GMP %"
     ] = (
         df.loc[
-            valid,
+            calculate_percent,
             "GMP"
         ]
         /
         df.loc[
-            valid,
+            calculate_percent,
             "IPO Price"
         ]
         *
         100
     )
 
+
     # ========================================================
-    # CALCULATE ESTIMATED LISTING
+    # ESTIMATED LISTING
     # ========================================================
 
     df["Estimated Listing"] = (
@@ -991,8 +796,9 @@ def save_result(df):
         df["GMP"]
     )
 
+
     # ========================================================
-    # ADD TIMESTAMP
+    # TIMESTAMP
     # ========================================================
 
     now = pd.Timestamp.now(
@@ -1005,8 +811,9 @@ def save_result(df):
         )
     )
 
+
     # ========================================================
-    # REMOVE DUPLICATE IPOs
+    # REMOVE DUPLICATES
     # ========================================================
 
     df = df.drop_duplicates(
@@ -1015,6 +822,7 @@ def save_result(df):
         ],
         keep="first"
     )
+
 
     # ========================================================
     # COLUMN ORDER
@@ -1026,15 +834,15 @@ def save_result(df):
         "GMP %",
         "IPO Price",
         "Estimated Listing",
+        "Updated",
         "Open",
         "Close",
         "BOA Date",
         "Listing Date",
-        "Updated",
         "Last Updated",
     ]
 
-    existing_columns = [
+    final_columns = [
         column
         for column in preferred_columns
         if column in df.columns
@@ -1043,14 +851,14 @@ def save_result(df):
     remaining_columns = [
         column
         for column in df.columns
-        if column not in existing_columns
+        if column not in final_columns
     ]
 
     df = df[
-        existing_columns
-        +
+        final_columns +
         remaining_columns
     ]
+
 
     # ========================================================
     # SAVE
@@ -1063,46 +871,12 @@ def save_result(df):
     )
 
     print(
-        f"Saved {len(df)} IPO records to:"
+        f"Saved {len(df)} IPO records."
     )
 
     print(
         RESULT_FILE
     )
-
-    # ========================================================
-    # PRINT PREVIEW
-    # ========================================================
-
-    print()
-    print("DATA PREVIEW")
-    print("-" * 70)
-
-    preview_columns = [
-        "IPO Name",
-        "GMP",
-        "GMP %",
-        "IPO Price",
-        "Estimated Listing",
-    ]
-
-    preview_columns = [
-        column
-        for column in preview_columns
-        if column in df.columns
-    ]
-
-    if preview_columns:
-
-        print(
-            df[
-                preview_columns
-            ].to_string(
-                index=False
-            )
-        )
-
-    print("-" * 70)
 
 
 # ============================================================
@@ -1115,11 +889,14 @@ def update_history(current_df):
 
         return
 
+
     now = pd.Timestamp.now(
         tz=INDIA_TIMEZONE
     )
 
+
     history_rows = []
+
 
     for _, row in current_df.iterrows():
 
@@ -1166,12 +943,14 @@ def update_history(current_df):
             }
         )
 
+
     new_history = pd.DataFrame(
         history_rows
     )
 
+
     # ========================================================
-    # EXISTING HISTORY
+    # LOAD EXISTING HISTORY
     # ========================================================
 
     if HISTORY_FILE.exists():
@@ -1189,6 +968,7 @@ def update_history(current_df):
     else:
 
         old_history = pd.DataFrame()
+
 
     # ========================================================
     # COMBINE
@@ -1208,8 +988,9 @@ def update_history(current_df):
 
         history = new_history
 
+
     # ========================================================
-    # ENSURE CORRECT COLUMNS
+    # REQUIRED COLUMNS
     # ========================================================
 
     columns = [
@@ -1221,35 +1002,34 @@ def update_history(current_df):
         "Last Updated",
     ]
 
+
     for column in columns:
 
         if column not in history.columns:
 
             history[column] = ""
 
+
     history = history[
         columns
     ]
+
 
     # ========================================================
     # NUMERIC
     # ========================================================
 
-    history["GMP Numeric"] = (
-        pd.to_numeric(
-            history["GMP Numeric"],
-            errors="coerce"
-        )
-        .fillna(0)
-    )
+    history["GMP Numeric"] = pd.to_numeric(
+        history["GMP Numeric"],
+        errors="coerce"
+    ).fillna(0)
 
-    history["GMP %"] = (
-        pd.to_numeric(
-            history["GMP %"],
-            errors="coerce"
-        )
-        .fillna(0)
-    )
+
+    history["GMP %"] = pd.to_numeric(
+        history["GMP %"],
+        errors="coerce"
+    ).fillna(0)
+
 
     # ========================================================
     # REMOVE EXACT DUPLICATES
@@ -1266,8 +1046,9 @@ def update_history(current_df):
         keep="last"
     )
 
+
     # ========================================================
-    # SORT LATEST FIRST
+    # SORT
     # ========================================================
 
     history["_datetime"] = pd.to_datetime(
@@ -1277,10 +1058,12 @@ def update_history(current_df):
         errors="coerce"
     )
 
+
     history = history.sort_values(
         by="_datetime",
         ascending=False
     )
+
 
     history = history.drop(
         columns=[
@@ -1288,8 +1071,9 @@ def update_history(current_df):
         ]
     )
 
+
     # ========================================================
-    # SAVE HISTORY
+    # SAVE
     # ========================================================
 
     history.to_csv(
@@ -1298,12 +1082,13 @@ def update_history(current_df):
         encoding="utf-8-sig"
     )
 
+
     print(
         f"History records: {len(history)}"
     )
 
     print(
-        f"Saved history to: {HISTORY_FILE}"
+        HISTORY_FILE
     )
 
 
@@ -1314,7 +1099,11 @@ def update_history(current_df):
 def scrape():
 
     print("=" * 70)
-    print("IPO GMP SCRAPER")
+
+    print(
+        "IPO GMP SCRAPER"
+    )
+
     print("=" * 70)
 
     print(
@@ -1329,17 +1118,16 @@ def scrape():
         f"History: {HISTORY_FILE}"
     )
 
-    with sync_playwright() as p:
 
-        # ====================================================
-        # BROWSER
-        # ====================================================
+    with sync_playwright() as p:
 
         browser = p.chromium.launch(
             headless=True
         )
 
+
         page = browser.new_page(
+
             viewport={
                 "width": 1920,
                 "height": 1080,
@@ -1355,15 +1143,13 @@ def scrape():
             ),
         )
 
-        try:
 
-            # =================================================
-            # OPEN WEBSITE
-            # =================================================
+        try:
 
             print(
                 "Opening IPO GMP website..."
             )
+
 
             page.goto(
                 SOURCE_URL,
@@ -1371,13 +1157,11 @@ def scrape():
                 timeout=120000
             )
 
-            # =================================================
-            # WAIT
-            # =================================================
 
             page.wait_for_timeout(
                 5000
             )
+
 
             print(
                 "Page loaded:"
@@ -1387,6 +1171,7 @@ def scrape():
                 page.title()
             )
 
+
             # =================================================
             # GET TABLE
             # =================================================
@@ -1394,6 +1179,7 @@ def scrape():
             table = get_gmp_table(
                 page
             )
+
 
             # =================================================
             # EXTRACT
@@ -1403,10 +1189,12 @@ def scrape():
                 table
             )
 
+
             print(
                 f"Raw records extracted: "
                 f"{len(raw_data)}"
             )
+
 
             # =================================================
             # NORMALIZE
@@ -1416,13 +1204,15 @@ def scrape():
                 raw_data
             )
 
+
             # =================================================
-            # ADD DATE FIELDS
+            # DATES
             # =================================================
 
             result = add_ipo_dates(
                 result
             )
+
 
             # =================================================
             # SAVE RESULT
@@ -1432,6 +1222,7 @@ def scrape():
                 result
             )
 
+
             # =================================================
             # UPDATE HISTORY
             # =================================================
@@ -1440,15 +1231,15 @@ def scrape():
                 result
             )
 
-            # =================================================
-            # SUCCESS
-            # =================================================
 
             print("=" * 70)
+
             print(
                 "SCRAPER COMPLETED SUCCESSFULLY"
             )
+
             print("=" * 70)
+
 
         finally:
 
@@ -1468,7 +1259,11 @@ if __name__ == "__main__":
     except Exception as error:
 
         print("=" * 70)
-        print("SCRAPER FAILED")
+
+        print(
+            "SCRAPER FAILED"
+        )
+
         print("=" * 70)
 
         print(
@@ -1476,3 +1271,4 @@ if __name__ == "__main__":
         )
 
         raise
+```
