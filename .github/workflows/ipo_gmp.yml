@@ -63,20 +63,12 @@ jobs:
 
     steps:
 
-      # ------------------------------------------------------
-      # CHECKOUT
-      # ------------------------------------------------------
-
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: true
 
-
-      # ------------------------------------------------------
-      # PYTHON
-      # ------------------------------------------------------
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -85,10 +77,6 @@ jobs:
           cache: "pip"
 
 
-      # ------------------------------------------------------
-      # DEPENDENCIES
-      # ------------------------------------------------------
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -96,14 +84,10 @@ jobs:
           python -m playwright install --with-deps chromium
 
 
-      # ------------------------------------------------------
-      # RUN SCRAPER
-      # ------------------------------------------------------
-
       - name: Run IPO GMP scraper
         run: |
           echo "=========================================="
-          echo "STARTING IPO GMP SCRAPER"
+          echo "IPO GMP SCRAPER"
           echo "=========================================="
 
           echo ""
@@ -127,14 +111,10 @@ jobs:
           echo "Scraper completed."
 
 
-      # ------------------------------------------------------
-      # VERIFY RESULT
-      # ------------------------------------------------------
-
       - name: Verify result CSV
         run: |
           echo "=========================================="
-          echo "VERIFYING RESULT CSV"
+          echo "VERIFY RESULT CSV"
           echo "=========================================="
 
           if [ ! -f "ipo_gmp_result.csv" ]; then
@@ -152,22 +132,18 @@ jobs:
           ls -lh ipo_gmp_result.csv
 
           echo ""
-          echo "Number of lines:"
+          echo "Rows:"
           wc -l ipo_gmp_result.csv
 
           echo ""
-          echo "First 10 lines:"
+          echo "Data:"
           head -10 ipo_gmp_result.csv
 
-
-      # ------------------------------------------------------
-      # VERIFY HISTORY
-      # ------------------------------------------------------
 
       - name: Verify history CSV
         run: |
           echo "=========================================="
-          echo "VERIFYING HISTORY CSV"
+          echo "VERIFY HISTORY CSV"
           echo "=========================================="
 
           if [ ! -f "ipo_gmp_history.csv" ]; then
@@ -185,27 +161,19 @@ jobs:
           ls -lh ipo_gmp_history.csv
 
           echo ""
-          echo "Number of lines:"
+          echo "Rows:"
           wc -l ipo_gmp_history.csv
 
           echo ""
-          echo "First 10 lines:"
+          echo "Latest records:"
           head -10 ipo_gmp_history.csv
 
-
-      # ------------------------------------------------------
-      # GIT CONFIG
-      # ------------------------------------------------------
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-
-      # ------------------------------------------------------
-      # STAGE CSV FILES
-      # ------------------------------------------------------
 
       - name: Stage CSV files
         run: |
@@ -218,10 +186,6 @@ jobs:
 
           git diff --cached --name-only
 
-
-      # ------------------------------------------------------
-      # CHECK CHANGES
-      # ------------------------------------------------------
 
       - name: Check for changes
         id: changes
@@ -236,19 +200,11 @@ jobs:
           fi
 
 
-      # ------------------------------------------------------
-      # COMMIT
-      # ------------------------------------------------------
-
       - name: Commit CSV files
         if: steps.changes.outputs.changed == 'true'
         run: |
           git commit -m "Update IPO GMP data"
 
-
-      # ------------------------------------------------------
-      # SYNC WITH MAIN
-      # ------------------------------------------------------
 
       - name: Synchronize with main
         if: steps.changes.outputs.changed == 'true'
@@ -257,22 +213,15 @@ jobs:
           git rebase origin/main
 
 
-      # ------------------------------------------------------
-      # PUSH
-      # ------------------------------------------------------
-
       - name: Push changes
         if: steps.changes.outputs.changed == 'true'
         run: |
           git push origin HEAD:main
 
 
-      # ------------------------------------------------------
-      # FINAL VERIFICATION
-      # ------------------------------------------------------
-
       - name: Final verification
         run: |
+          echo ""
           echo "=========================================="
           echo "FINAL VERIFICATION"
           echo "=========================================="
